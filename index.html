@@ -609,30 +609,14 @@
             <!-- Forgot Password Form -->
             <div id="form-forgot" style="display:none;">
                 <h3 style="color:var(--primary); margin-bottom:15px; font-size:1.1rem;">🔑 استعادة كلمة المرور</h3>
-                <div id="forgot-step-1">
+                <div>
                     <div class="form-group" style="text-align:right;">
                         <label>البريد الإلكتروني المسجل في النظام *</label>
                         <input type="email" id="forgot-email" placeholder="أدخل بريدك الإلكتروني">
                     </div>
-                    <button type="button" class="btn btn-primary" style="width:100%; justify-content:center;" onclick="sendForgotPasswordCode()">📧 إرسال كود التحقق</button>
+                    <button type="button" class="btn btn-primary" style="width:100%; justify-content:center; padding:10px; font-weight:bold;" onclick="sendForgotPasswordCode()">📧 إرسال رابط استعادة كلمة المرور</button>
                 </div>
-                <div id="forgot-step-2" style="display:none;">
-                    <div class="alert alert-success" id="forgot-code-hint"></div>
-                    <div class="form-group" style="text-align:right;">
-                        <label>كود التحقق المرسل (6 أرقام) *</label>
-                        <input type="text" id="forgot-otp" placeholder="أدخل الكود" maxlength="6">
-                    </div>
-                    <div class="form-group" style="text-align:right;">
-                        <label>كلمة المرور الجديدة *</label>
-                        <input type="password" id="forgot-newpass" placeholder="كلمة المرور الجديدة">
-                    </div>
-                    <div class="form-group" style="text-align:right;">
-                        <label>تأكيد كلمة المرور الجديدة *</label>
-                        <input type="password" id="forgot-confirmpass" placeholder="تأكيد كلمة المرور">
-                    </div>
-                    <button type="button" class="btn btn-success" style="width:100%; justify-content:center;" onclick="submitForgotPasswordReset()">✅ تغيير كلمة المرور</button>
-                </div>
-                <div style="margin-top:12px; text-align:center;">
+                <div style="margin-top:14px; text-align:center;">
                     <button type="button" class="btn" style="font-size:0.9rem; background:transparent; border:none; color:var(--primary); text-decoration:underline;" onclick="showLoginForm()">← رجوع لتسجيل الدخول</button>
                 </div>
             </div>
@@ -712,6 +696,7 @@
                     <label>👤 المستخدم:</label>
                     <span id="current-user-display">Acc. Ashraf Hassuna</span>
                 </div>
+                <button class="btn btn-sm" onclick="openChangePasswordModal()" title="تغيير كلمة المرور" style="border:1px solid var(--border); font-size:0.85rem; font-weight:600;">🔑 كلمة المرور</button>
                 <button class="btn btn-sm btn-danger" onclick="handleLogout()" title="تسجيل الخروج من هذا الحساب">🚪 خروج</button>
                 <button class="btn" id="lang-toggle" title="تغيير اللغة (Change Language)">EN</button>
                 <button class="btn" id="theme-toggle" title="تغيير المظهر (Theme)">🌙</button>
@@ -973,7 +958,8 @@
                 return items.length ? Math.max(...items.map(i => Number(i.id) || 0)) + 1 : 1;
             },
             syncFromFirebase: function(uid, callback) {
-                firebase.database().ref('users/' + uid).once('value').then(snapshot => {
+                const dbRef = firebase.database().ref('users/' + uid);
+                dbRef.once('value').then(snapshot => {
                     const data = snapshot.val();
                     if (data) {
                         const username = this.getCurrentUsername() || 'guest';
@@ -986,6 +972,14 @@
                 }).catch(e => {
                     console.warn('Firebase sync error:', e);
                     if (callback) callback();
+                });
+
+                // مزامنة فورية في الخلفية إذا تم تعديل أي بيانات من جهاز آخر
+                dbRef.on('child_changed', snapshot => {
+                    const col = snapshot.key;
+                    const val = snapshot.val();
+                    const username = this.getCurrentUsername() || 'guest';
+                    localStorage.setItem('SistymDB_u_' + username + '_' + col, JSON.stringify(val));
                 });
             },
             init: function() {
@@ -1177,7 +1171,71 @@
                     if (err.code === 'auth/invalid-email') msg = 'صيغة البريد الإلكتروني غير صحيحة.';
                     if (err.code === 'auth/unauthorized-domain') msg = 'يجب إضافة bytebin.lucko.me في Authorized domains في Firebase.';
                     errBox.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
-                });
+        }
+
+        // ── In-App Change Password Modal ──────────────────────────────
+        function openChangePasswordModal() {
+            const modalContent = document.getElementById('modal-content');
+            modalContent.innerHTML = `
+                <div style="padding:10px 5px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); padding-bottom:12px; margin-bottom:18px;">
+                        <h3 style="margin:0; color:var(--primary); font-size:1.2rem; display:flex; align-items:center; gap:8px;">🔑 تغيير كلمة المرور</h3>
+                        <button class="btn btn-sm" onclick="closeModal()" style="font-size:1.2rem; line-height:1;">✕</button>
+                    </div>
+                    <div id="change-pass-error-msg"></div>
+                    <form onsubmit="submitInAppPasswordChange(event)">
+                        <div class="form-group" style="text-align:right; margin-bottom:15px;">
+                            <label style="display:block; margin-bottom:6px; font-weight:600;">كلمة المرور الجديدة *</label>
+                            <input type="password" id="new-user-pass" required placeholder="6 أحرف أو أرقام على الأقل" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                        </div>
+                        <div class="form-group" style="text-align:right; margin-bottom:20px;">
+                            <label style="display:block; margin-bottom:6px; font-weight:600;">تأكيد كلمة المرور الجديدة *</label>
+                            <input type="password" id="confirm-user-pass" required placeholder="أعد كتابة كلمة المرور" style="width:100%; padding:10px; border:1px solid var(--border); border-radius:8px;">
+                        </div>
+                        <div style="display:flex; gap:10px; justify-content:flex-end;">
+                            <button type="button" class="btn" onclick="closeModal()" style="padding:8px 16px;">إلغاء</button>
+                            <button type="submit" class="btn btn-primary" style="padding:8px 20px; font-weight:bold;">💾 حفظ كلمة المرور</button>
+                        </div>
+                    </form>
+                </div>
+            `;
+            document.getElementById('modal-overlay').style.display = 'flex';
+        }
+
+        function submitInAppPasswordChange(e) {
+            e.preventDefault();
+            const np = document.getElementById('new-user-pass').value;
+            const cp = document.getElementById('confirm-user-pass').value;
+            const errBox = document.getElementById('change-pass-error-msg');
+
+            if (np !== cp) {
+                errBox.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px;">كلمة المرور وتأكيدها غير متطابقين!</div>';
+                return;
+            }
+            if (np.length < 6) {
+                errBox.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px;">يجب أن تكون كلمة المرور 6 أحرف أو أرقام على الأقل!</div>';
+                return;
+            }
+
+            const user = firebase.auth().currentUser;
+            if (!user) {
+                errBox.innerHTML = '<div class="alert alert-danger" style="margin-bottom:12px;">يجب تسجيل الدخول أولاً!</div>';
+                return;
+            }
+
+            errBox.innerHTML = '<div class="alert" style="background:#e8f4fd;color:#1565c0;border-radius:8px;padding:10px;margin-bottom:12px;">⏳ جارٍ تحديث كلمة المرور في السحابة...</div>';
+
+            user.updatePassword(np).then(() => {
+                closeModal();
+                alert('✅ تم تغيير كلمة المرور بنجاح في السحابة!');
+            }).catch(err => {
+                console.error('Update password error:', err);
+                let msg = 'حدث خطأ أثناء تغيير كلمة المرور: ' + (err.message || '');
+                if (err.code === 'auth/requires-recent-login') {
+                    msg = '⚠️ لأسباب أمنية، يرجى تسجيل الخروج ثم تسجيل الدخول مرة أخرى قبل تغيير كلمة المرور.';
+                }
+                errBox.innerHTML = `<div class="alert alert-danger" style="margin-bottom:12px;">${msg}</div>`;
+            });
         }
 
         // ==========================================
