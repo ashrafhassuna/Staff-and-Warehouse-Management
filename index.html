@@ -1169,8 +1169,8 @@
                     let msg = 'تعذر إرسال البريد: ' + (err.message || '');
                     if (err.code === 'auth/user-not-found') msg = 'هذا البريد الإلكتروني غير مسجل في النظام.';
                     if (err.code === 'auth/invalid-email') msg = 'صيغة البريد الإلكتروني غير صحيحة.';
-                    if (err.code === 'auth/unauthorized-domain') msg = 'يجب إضافة bytebin.lucko.me في Authorized domains في Firebase.';
                     errBox.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+                });
         }
 
         // ── In-App Change Password Modal ──────────────────────────────
