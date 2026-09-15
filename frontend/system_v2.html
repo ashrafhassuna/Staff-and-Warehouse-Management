@@ -460,6 +460,28 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
         }
         .footer a { color: var(--primary); text-decoration: none; font-weight: bold; }
         .footer a:hover { text-decoration: underline; }
+        .footer-social-links {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .footer-social-links a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: #fff;
+            font-family: Arial, sans-serif;
+            font-size: 0.85rem;
+            line-height: 1;
+            text-decoration: none;
+        }
+        .footer-social-links a:last-child { background: #1877f2; }
+        .footer-social-links a:hover { transform: translateY(-1px); text-decoration: none; }
 
         /* Mobile & Responsive Styling */
         .mobile-menu-btn {
@@ -744,7 +766,10 @@ var o=[];var l=Array.isArray(e);for(f=n.s.c;f<=n.e.c;++f)s[f]=ya(f);for(var c=n.
 
         <footer class="footer">
             This system was prepared by <strong>Acc. Ashraf Hassuna</strong><br>
-            <a href="https://www.linkedin.com/in/ashrafhassuna" target="_blank">www.linkedin.com/in/ashrafhassuna</a>
+            <span class="footer-social-links">
+                <a href="https://www.linkedin.com/in/ashrafhassuna" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn" title="LinkedIn">in</a>
+                <a href="https://www.facebook.com/Ashraf.hassuna" target="_blank" rel="noopener noreferrer" aria-label="Facebook" title="Facebook">f</a>
+            </span>
         </footer>
 
     </main>
