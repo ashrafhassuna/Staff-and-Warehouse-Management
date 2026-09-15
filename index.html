@@ -1012,6 +1012,34 @@
             return firebase.auth().currentUser ? firebase.auth().currentUser.uid : null;
         }
 
+        function repairWorkerIds() {
+            const workers = DB.get('Workers');
+            if (!workers.length) return;
+
+            const usedIds = new Set();
+            let nextId = Math.max(...workers.map(worker => Number(worker.id) || 0), 0) + 1;
+            let changed = false;
+            const repairedWorkers = workers.map(worker => {
+                const currentId = Number(worker.id);
+                if (Number.isInteger(currentId) && currentId > 0 && !usedIds.has(currentId)) {
+                    usedIds.add(currentId);
+                    return worker;
+                }
+
+                while (usedIds.has(nextId)) nextId += 1;
+                const repaired = { ...worker, id: nextId };
+                usedIds.add(nextId);
+                nextId += 1;
+                changed = true;
+                return repaired;
+            });
+
+            if (changed) {
+                DB.set('Workers', repairedWorkers);
+                console.warn('تم إصلاح أرقام تعريف العمال المكررة تلقائياً.');
+            }
+        }
+
         // ==========================================
         // DB OBJECT — يحفظ في Firebase + localStorage معاً
         // ==========================================
@@ -1081,7 +1109,10 @@
                 });
             },
             init: function() {
-                if (this.getCurrentUsername()) { this.initUserAccountData(); }
+                if (this.getCurrentUsername()) {
+                    this.initUserAccountData();
+                    repairWorkerIds();
+                }
             },
             initUserAccountData: function() {
                 if (!this.getOne('CompanySettings')) {
@@ -2531,6 +2562,33 @@
             downloadExcelWorkbook(wb, 'Workers_Template.xlsx');
         }
 
+        function normalizeImportedDate(value) {
+            if (value === null || value === undefined || value === '') return '';
+            const text = String(value).trim();
+            if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(text)) {
+                const [year, month, day] = text.split('-');
+                return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+            }
+            const match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+            if (match) return `${match[3]}-${match[2].padStart(2, '0')}-${match[1].padStart(2, '0')}`;
+            const serial = Number(text);
+            if (Number.isFinite(serial) && serial > 20000 && serial < 80000) {
+                return new Date(Date.UTC(1899, 11, 30) + serial * 86400000).toISOString().slice(0, 10);
+            }
+            return text;
+        }
+
+        function normalizeWorkerStatus(value) {
+            const status = String(value || '').trim().toLowerCase();
+            if (status.includes('left') || status.includes('مستقيل') || status.includes('مغادر')) return 'Left';
+            if (status.includes('terminated') || status.includes('منه')) return 'Terminated';
+            return 'Active';
+        }
+
+        function normalizeApartmentValue(value) {
+            return String(value || '').trim().replace(/^شقة\s*/i, '');
+        }
+
         // --- Factories Excel Export & Template ---
         function exportFactoriesExcel() {
             const factories = DB.get('Factories');
@@ -2710,9 +2768,9 @@
                     const jobTitle = getVal(r, ['المسمى الوظيفي', 'المسمى', 'الوظيفة']);
                     const facInput = getVal(r, ['كود المصنع', 'اسم المصنع', 'المصنع']);
                     const houseInput = getVal(r, ['عمارة السكن', 'السكن', 'العمارة']);
-                    const apartment = getVal(r, ['رقم الشقة', 'الشقة']);
-                    const startDate = getVal(r, ['تاريخ التعيين', 'تاريخ العمل']) || new Date().toISOString().split('T')[0];
-                    const status = getVal(r, ['الحالة', 'حالة العمل']) || 'Active';
+                    const apartment = normalizeApartmentValue(getVal(r, ['رقم الشقة', 'الشقة']));
+                    const startDate = normalizeImportedDate(getVal(r, ['تاريخ التعيين', 'تاريخ العمل'])) || new Date().toISOString().split('T')[0];
+                    const status = normalizeWorkerStatus(getVal(r, ['الحالة', 'حالة العمل']));
                     const notes = getVal(r, ['ملاحظات', 'ملاحظة']);
 
                     const errors = [];
@@ -2748,7 +2806,7 @@
                     if (houseInput) {
                         const foundHouse = housing.find(h => 
                             (h.name && h.name.toLowerCase().includes(houseInput.toLowerCase())) ||
-                            (h.number && String(h.number) === houseInput) ||
+                            (h.number && (String(h.number) === houseInput || `عمارة ${h.number}`.toLowerCase() === houseInput.toLowerCase())) ||
                             String(h.id) === houseInput
                         );
                         if (foundHouse) {
@@ -3084,6 +3142,8 @@
                 const housing = DB.get('Housing');
                 fields += '<div class="form-row"><div class="form-group"><label>رقم الهاتف *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div><div class="form-group"><label>المسمى الوظيفي *</label><input id="import-edit-jobtitle" value="' + escapeImportValue(row.jobTitle) + '"></div></div>';
                 fields += '<div class="form-row"><div class="form-group"><label>المصنع</label><select id="import-edit-factory"><option value="">-- بدون مصنع --</option>' + factories.map(function(f) { return '<option value="' + f.id + '"' + (Number(f.id) === Number(row.factoryId) ? ' selected' : '') + '>' + escapeImportValue(f.name) + '</option>'; }).join('') + '</select></div><div class="form-group"><label>عمارة السكن</label><select id="import-edit-building"><option value="">-- بدون سكن --</option>' + housing.map(function(h) { return '<option value="' + h.id + '"' + (Number(h.id) === Number(row.buildingId) ? ' selected' : '') + '>' + escapeImportValue(h.name || ('عمارة ' + h.number)) + '</option>'; }).join('') + '</select></div></div>';
+                fields += '<div class="form-row"><div class="form-group"><label>الرقم القومي</label><input id="import-edit-national-id" value="' + escapeImportValue(row.nationalId) + '"></div><div class="form-group"><label>رقم الشقة</label><input id="import-edit-apartment" value="' + escapeImportValue(row.apartment) + '"></div></div>';
+                fields += '<div class="form-row"><div class="form-group"><label>تاريخ التعيين</label><input type="date" id="import-edit-start-date" value="' + escapeImportValue(normalizeImportedDate(row.startDate)) + '"></div><div class="form-group"><label>الحالة</label><select id="import-edit-status"><option value="Active"' + (row.status === 'Active' ? ' selected' : '') + '>نشط</option><option value="Left"' + (row.status === 'Left' ? ' selected' : '') + '>مستقيل / مغادر</option><option value="Terminated"' + (row.status === 'Terminated' ? ' selected' : '') + '>منهي الخدمة</option></select></div></div>';
             } else if (type === 'supervisors') {
                 fields += '<div class="form-group"><label>رقم موبيل العمل *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div>';
             } else {
@@ -3108,6 +3168,10 @@
                 row.jobTitle = document.getElementById('import-edit-jobtitle').value.trim();
                 row.factoryId = document.getElementById('import-edit-factory').value || null;
                 row.buildingId = document.getElementById('import-edit-building').value || '';
+                row.nationalId = document.getElementById('import-edit-national-id').value.trim();
+                row.apartment = normalizeApartmentValue(document.getElementById('import-edit-apartment').value);
+                row.startDate = normalizeImportedDate(document.getElementById('import-edit-start-date').value);
+                row.status = normalizeWorkerStatus(document.getElementById('import-edit-status').value);
             } else if (currentImportState.type === 'supervisors') {
                 row.mobile = document.getElementById('import-edit-mobile').value.trim();
             } else {
@@ -5069,13 +5133,13 @@
             openModal(`
                 <div class="modal-header"><h3>✏️ تعديل شامل لبيانات العامل</h3><button class="modal-close" onclick="closeModal()">×</button></div>
                 <div class="form-row">
-                    <div class="form-group"><label>كود العامل *</label><input type="text" id="w-code" value="${worker.code}"></div>
-                    <div class="form-group"><label>اسم العامل بالكامل *</label><input type="text" id="w-name" value="${worker.name}"></div>
+                    <div class="form-group"><label>كود العامل *</label><input type="text" id="w-code" value="${escapeImportValue(worker.code)}"></div>
+                    <div class="form-group"><label>اسم العامل بالكامل *</label><input type="text" id="w-name" value="${escapeImportValue(worker.name)}"></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>رقم الهاتف / الموبايل *</label><input type="text" id="w-phone" value="${worker.mobile}"></div>
-                    <div class="form-group"><label>الرقم القومي</label><input type="text" id="w-natid" value="${worker.nationalId || ''}"></div>
-<div class="form-group"><label>المسمى الوظيفي *</label><input type="text" id="w-jobtitle" placeholder="مثال: عامل إنتاج، ميكانيكي، حارس أمن..." value="${worker.jobTitle || ''}"></div>
+                    <div class="form-group"><label>رقم الهاتف / الموبايل *</label><input type="text" id="w-phone" value="${escapeImportValue(worker.mobile)}"></div>
+                    <div class="form-group"><label>الرقم القومي</label><input type="text" id="w-natid" value="${escapeImportValue(worker.nationalId || '')}"></div>
+<div class="form-group"><label>المسمى الوظيفي *</label><input type="text" id="w-jobtitle" placeholder="مثال: عامل إنتاج، ميكانيكي، حارس أمن..." value="${escapeImportValue(worker.jobTitle || '')}"></div>
 </div>
                 <div class="form-row">
                     <div class="form-group">
@@ -5108,8 +5172,8 @@
                     </div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>تاريخ التعيين</label><input type="date" id="w-start" value="${worker.startDate || ''}"></div>
-                    <div class="form-group"><label>تاريخ ترك العمل (إن وجد)</label><input type="date" id="w-exit-date" value="${worker.exitDate || ''}"></div>
+                    <div class="form-group"><label>تاريخ التعيين</label><input type="date" id="w-start" value="${normalizeImportedDate(worker.startDate)}"></div>
+                    <div class="form-group"><label>تاريخ ترك العمل (إن وجد)</label><input type="date" id="w-exit-date" value="${normalizeImportedDate(worker.exitDate)}"></div>
                 </div>
                 <div class="form-group"><label>ملاحظات إضافية</label><textarea id="w-notes" rows="2">${worker.notes || ''}</textarea></div>
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
@@ -5140,7 +5204,7 @@
             const natId = document.getElementById('w-natid').value.trim();
             const facId = Number(document.getElementById('w-fac').value);
             const buildingId = document.getElementById('w-building') ? document.getElementById('w-building').value : '';
-            const apartment = document.getElementById('w-apartment') ? document.getElementById('w-apartment').value.trim() : '';
+            const apartment = document.getElementById('w-apartment') ? normalizeApartmentValue(document.getElementById('w-apartment').value) : '';
             const notes = document.getElementById('w-notes').value.trim();
 const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
@@ -5155,7 +5219,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     id: DB.nextId('Workers'),
                     code: code, name: name, mobile: phone, nationalId: natId,
                     factoryId: facId, buildingId: buildingId, apartment: apartment,
-                    startDate: document.getElementById('w-start').value,
+                    startDate: normalizeImportedDate(document.getElementById('w-start').value),
                     jobTitle: jobTitle,
                     status: 'Active', notes: notes
                 };
@@ -5173,7 +5237,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 workers[idx].buildingId = buildingId;
                 workers[idx].apartment = apartment;
                 workers[idx].status = document.getElementById('w-status').value;
-                workers[idx].startDate = document.getElementById('w-start').value;
+                workers[idx].startDate = normalizeImportedDate(document.getElementById('w-start').value);
                 workers[idx].exitDate = document.getElementById('w-exit-date') ? document.getElementById('w-exit-date').value : '';
                 workers[idx].notes = notes;
                 workers[idx].jobTitle = jobTitle;
