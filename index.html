@@ -538,13 +538,23 @@
             .sidebar, .top-bar, .btn, .modal-overlay, #lang-toggle, #theme-toggle, .no-print, .auth-overlay, .mobile-menu-btn, .sidebar-backdrop {
                 display: none !important;
             }
-            body { background: #fff !important; color: #000 !important; font-size: 12pt; display: block; }
-            .main-content { margin: 0 !important; padding: 0 !important; }
+            body {
+                background: #fff !important;
+                color: #000 !important;
+                font-size: 12pt;
+                display: block;
+                padding-bottom: 26mm;
+            }
+            .main-content {
+                margin: 0 !important;
+                padding: 0 !important;
+            }
             .view-container {
                 border: none !important;
                 box-shadow: none !important;
                 padding: 0 !important;
                 margin-top: 12px !important;
+                margin-bottom: 32mm !important;
             }
             table {
                 width: 100% !important;
@@ -582,7 +592,7 @@
                 margin: 0;
                 padding: 0 8px;
             }
-            @page { margin: 12mm 12mm 20mm 12mm; }
+            @page { margin: 12mm 12mm 28mm 12mm; }
             .print-signatures {
                 display: flex !important;
                 justify-content: space-between;
@@ -591,11 +601,14 @@
                 position: fixed;
                 left: 12mm;
                 right: 12mm;
-                bottom: 12mm;
+                bottom: 8mm;
                 margin: 0;
-                padding-top: 12px;
+                padding: 10px 0 0 0;
+                border-top: 1.5px solid #333;
+                background: #fff;
                 direction: rtl;
                 page-break-inside: avoid;
+                z-index: 2;
             }
             .signature-block {
                 flex: 1;
@@ -607,7 +620,7 @@
             }
             .signature-line {
                 width: 82%;
-                margin: 36px auto 0;
+                margin: 34px auto 0;
                 border-top: 1.5px solid #000;
                 padding-top: 6px;
                 font-size: 10pt;
