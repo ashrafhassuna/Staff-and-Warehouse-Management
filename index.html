@@ -5041,14 +5041,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>🏠 عمارة السكن (اختياري)</label>
-                        <select id="w-building">
+                        <select id="w-building" onchange="updateWorkerApartmentOptions(this.value)">
                             <option value="">-- بدون سكن (خارجي) --</option>
                             ${housing.map(h => `<option value="${h.id}">عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>🚪 رقم الشقة بالسكن</label>
-                        <input type="text" id="w-apartment" placeholder="مثال: شقة 10 أو 5">
+                        <select id="w-apartment" disabled>
+                            <option value="">-- اختر العمارة أولاً --</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-group"><label>ملاحظات</label><textarea id="w-notes" rows="2"></textarea></div>
@@ -5092,14 +5094,17 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>🏠 عمارة السكن</label>
-                        <select id="w-building">
+                        <select id="w-building" onchange="updateWorkerApartmentOptions(this.value, '${worker.apartment || ''}')">
                             <option value="">-- بدون سكن (خارجي) --</option>
                             ${housing.map(h => `<option value="${h.id}" ${worker.buildingId && Number(worker.buildingId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>🚪 رقم الشقة بالسكن</label>
-                        <input type="text" id="w-apartment" value="${worker.apartment || ''}" placeholder="مثال: شقة 10 أو 5">
+                        <select id="w-apartment">
+                            <option value="">-- اختر الشقة --</option>
+                            ${(housing.find(h => Number(h.id) === Number(worker.buildingId))?.apartments || []).map(apt => `<option value="${apt.number}" ${String(apt.number) === String(worker.apartment) ? 'selected' : ''}>شقة ${apt.number}${apt.floor ? ` - الدور ${apt.floor}` : ''}</option>`).join('')}
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
@@ -5112,6 +5117,20 @@
                     <button class="btn btn-success" onclick="saveWorkerData(${workerId})">💾 حفظ التعديلات</button>
                 </div>
             `);
+            updateWorkerApartmentOptions(String(worker.buildingId || ''), String(worker.apartment || ''));
+        }
+
+        function updateWorkerApartmentOptions(buildingId, selectedApartment = '') {
+            const apartmentSelect = document.getElementById('w-apartment');
+            if (!apartmentSelect) return;
+
+            const building = DB.get('Housing').find(h => String(h.id) === String(buildingId));
+            const apartments = building?.apartments || [];
+            apartmentSelect.innerHTML = apartments.length
+                ? `<option value="">-- اختر الشقة --</option>${apartments.map(apt => `<option value="${apt.number}">شقة ${apt.number}${apt.floor ? ` - الدور ${apt.floor}` : ''}</option>`).join('')}`
+                : '<option value="">-- لا توجد شقق مسجلة لهذه العمارة --</option>';
+            apartmentSelect.disabled = !buildingId || apartments.length === 0;
+            if (selectedApartment !== '') apartmentSelect.value = String(selectedApartment);
         }
 
         function saveWorkerData(workerId, returnFacId = null) {
