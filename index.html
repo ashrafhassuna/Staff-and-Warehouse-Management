@@ -540,11 +540,49 @@
             }
             body { background: #fff !important; color: #000 !important; font-size: 12pt; display: block; }
             .main-content { margin: 0 !important; padding: 0 !important; }
-            .view-container { border: none !important; box-shadow: none !important; padding: 0 !important; }
-            table { width: 100% !important; border-collapse: collapse; }
-            th, td { border: 1px solid #555 !important; padding: 7px 9px !important; }
-            .print-header { display: block !important; margin-bottom: 20px; }
-            @page { margin: 12mm 12mm 42mm 12mm; }
+            .view-container {
+                border: none !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                margin-top: 12px !important;
+            }
+            table {
+                width: 100% !important;
+                border-collapse: collapse;
+                font-size: 12pt !important;
+            }
+            th, td { border: 1px solid #555 !important; padding: 9px 10px !important; }
+            .print-header {
+                display: block !important;
+                margin-bottom: 24px;
+                padding: 0 0 12px 0;
+                border-bottom: 1.5px solid #333;
+            }
+            .print-brand-row {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: center !important;
+                gap: 18px;
+                width: 100%;
+            }
+            #print-logo-container {
+                flex: 0 0 auto;
+                text-align: left;
+                min-width: 120px;
+                display: flex;
+                align-items: center;
+                justify-content: flex-start;
+            }
+            #print-report-title {
+                flex: 1;
+                text-align: center !important;
+                font-size: 22pt !important;
+                font-weight: bold !important;
+                color: #111 !important;
+                margin: 0;
+                padding: 0 8px;
+            }
+            @page { margin: 12mm 12mm 20mm 12mm; }
             .print-signatures {
                 display: flex !important;
                 justify-content: space-between;
@@ -553,9 +591,9 @@
                 position: fixed;
                 left: 12mm;
                 right: 12mm;
-                bottom: 10mm;
+                bottom: 12mm;
                 margin: 0;
-                padding: 0;
+                padding-top: 12px;
                 direction: rtl;
                 page-break-inside: avoid;
             }
@@ -568,8 +606,8 @@
                 font-size: 11pt;
             }
             .signature-line {
-                width: 78%;
-                margin: 38px auto 0;
+                width: 82%;
+                margin: 36px auto 0;
                 border-top: 1.5px solid #000;
                 padding-top: 6px;
                 font-size: 10pt;
@@ -734,20 +772,13 @@
             </div>
         </div>
 
-        <!-- Print & PDF Header: Name & Details on One Side, Logo on Opposite Side -->
+        <!-- Print & PDF Header: Logo on left, report title on right -->
         <div class="print-header" id="print-header">
-            <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #333; padding-bottom:15px; margin-bottom:15px;">
-                <div style="text-align:right; flex:1;">
-                    <h2 id="print-company-name" style="font-size:1.6rem; color:#111; margin-bottom:6px;"></h2>
-                    <div id="print-company-details" style="font-size:0.95rem; color:#444; line-height:1.6;"></div>
-                </div>
+            <div class="print-brand-row">
                 <div id="print-logo-container" style="text-align:left; min-width:140px;">
                     <!-- Injected Logo -->
                 </div>
-            </div>
-            <div style="text-align:center; margin: 12px 0 16px;">
-                <h3 id="print-report-title" style="font-size:1.35rem; color:#111; font-weight:bold; margin-bottom:4px;"></h3>
-                <p id="print-date" style="font-size:0.85rem; color:#666;"></p>
+                <h3 id="print-report-title" style="font-size:1.35rem; color:#111; font-weight:bold; margin:0; text-align:center;"></h3>
             </div>
         </div>
 
@@ -6247,29 +6278,19 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function printReport(title) {
             const company = DB.getOne('CompanySettings') || {};
-            
-            // Side A: Company Name & details
-            document.getElementById('print-company-name').textContent = company.name || 'نظام إدارة العهد';
-            
-            let detailsHtml = '';
-            if (company.phone) detailsHtml += `📞 ${company.phone} | `;
-            if (company.address) detailsHtml += `📍 ${company.address}<br>`;
-            if (company.commercialReg) detailsHtml += `📋 س.ت: ${company.commercialReg} | `;
-            if (company.taxCard) detailsHtml += `🏛️ ب.ض: ${company.taxCard} | `;
-            if (company.email) detailsHtml += `✉️ ${company.email}`;
-            document.getElementById('print-company-details').innerHTML = detailsHtml;
-
-            // Side B: Company Logo
             const logoContainer = document.getElementById('print-logo-container');
-            if (company.logo) {
-                logoContainer.innerHTML = `<img src="${company.logo}" style="max-height:85px; max-width:220px; object-fit:contain;">`;
-            } else {
-                logoContainer.innerHTML = '';
+            if (logoContainer) {
+                if (company.logo) {
+                    logoContainer.innerHTML = `<img src="${company.logo}" style="max-height:90px; max-width:180px; object-fit:contain;">`;
+                } else {
+                    logoContainer.innerHTML = '';
+                }
             }
 
-            // Single Report Title (Not Duplicated)
-            document.getElementById('print-report-title').textContent = 'تقرير العاملين والعهد';
-            document.getElementById('print-date').textContent = 'تاريخ الاستخراج والطباعة: ' + new Date().toLocaleString('ar-EG');
+            const reportTitle = document.getElementById('print-report-title');
+            if (reportTitle) {
+                reportTitle.textContent = title || 'تقرير العاملين والعهد';
+            }
 
             window.print();
         }
