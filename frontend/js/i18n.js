@@ -3,6 +3,8 @@ const translations = {
     ar: {
         // App
         appName: "نظام إدارة العمال والعهدة والمخازن",
+        systemAuthor: "تم إعداد النظام بواسطة Acc. Ashraf Hassuna",
+        authorLinkedIn: "www.linkedin.com/in/ashrafhassuna",
         
         // Navigation
         dashboard: "لوحة التحكم",
@@ -148,6 +150,8 @@ const translations = {
     en: {
         // App
         appName: "Workers, Custody & Warehouse Management System",
+        systemAuthor: "Prepared by Acc. Ashraf Hassuna",
+        authorLinkedIn: "www.linkedin.com/in/ashrafhassuna",
         
         // Navigation
         dashboard: "Dashboard",
