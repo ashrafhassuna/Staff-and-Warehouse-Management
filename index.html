@@ -543,7 +543,6 @@
                 color: #000 !important;
                 font-size: 12pt;
                 display: block;
-                padding-bottom: 0;
             }
             .main-content {
                 margin: 0 !important;
@@ -555,7 +554,6 @@
                 padding: 0 !important;
                 margin-top: 10px !important;
                 margin-bottom: 0 !important;
-                padding-bottom: 0 !important;
             }
             table {
                 width: 100% !important;
@@ -598,24 +596,21 @@
                 margin: 0;
                 padding: 0 8px;
             }
-            @page { margin: 10mm 10mm 50mm 10mm; }
+            @page { margin: 10mm; }
             .print-signatures {
                 display: flex !important;
                 justify-content: space-between;
                 align-items: flex-end;
                 gap: 18px;
-                position: fixed;
-                left: 10mm;
-                right: 10mm;
-                bottom: 6mm;
-                margin: 0;
+                position: static;
+                width: 100%;
+                margin: 24mm 0 0;
                 min-height: 32mm;
                 padding: 8px 0 0 0;
                 border-top: 1.5px solid #333;
                 background: #fff;
                 direction: rtl;
                 page-break-inside: avoid;
-                z-index: 2;
                 box-sizing: border-box;
             }
             .signature-block {
