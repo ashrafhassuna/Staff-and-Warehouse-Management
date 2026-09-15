@@ -544,6 +544,10 @@
             table { width: 100% !important; border-collapse: collapse; }
             th, td { border: 1px solid #555 !important; padding: 7px 9px !important; }
             .print-header { display: block !important; margin-bottom: 20px; }
+            .print-signatures { display: flex !important; justify-content: space-between; align-items: flex-end; gap: 24px; margin-top: 34px; padding-top: 12px; page-break-inside: avoid; }
+            .signature-right { display: flex; gap: 28px; }
+            .signature-block { min-width: 155px; text-align: center; font-weight: 700; color: #000; }
+            .signature-line { border-top: 1px solid #000; margin-top: 46px; padding-top: 6px; font-size: 10pt; font-weight: 400; }
             .footer { display: block !important; position: fixed; bottom: 0; width: 100%; font-size: 10pt; }
             .no-print-in-table { display: none !important; }
         }
@@ -717,6 +721,22 @@
             <div style="text-align:center; margin: 12px 0 16px;">
                 <h3 id="print-report-title" style="font-size:1.35rem; color:#111; font-weight:bold; margin-bottom:4px;"></h3>
                 <p id="print-date" style="font-size:0.85rem; color:#666;"></p>
+            </div>
+            <div id="print-signatures" class="print-signatures">
+                <div class="signature-right">
+                    <div class="signature-block">
+                        مدير التشغيل
+                        <div class="signature-line">الاسم والتوقيع</div>
+                    </div>
+                    <div class="signature-block">
+                        مدير الموارد البشرية
+                        <div class="signature-line">الاسم والتوقيع</div>
+                    </div>
+                </div>
+                <div class="signature-block">
+                    المدير العام
+                    <div class="signature-line">الاسم والتوقيع</div>
+                </div>
             </div>
         </div>
 
@@ -2776,6 +2796,7 @@
             const typeArabic = type === 'workers' ? 'العمال' : type === 'factories' ? 'المصانع' : 'الإداريين';
 
             const totalRows = validRows.length + invalidRows.length;
+            const invalidRowsHtml = invalidRows.length ? '<div style="margin:0 0 14px; border:1px solid #f59e0b; border-radius:8px; padding:12px; background:rgba(245,158,11,.08);"><strong>⚠️ صفوف تحتاج تصحيحًا قبل الاستيراد:</strong>' + invalidRows.map(function(row) { return '<div style="display:flex; justify-content:space-between; gap:10px; align-items:center; padding:8px 0; border-bottom:1px solid var(--border);"><span><strong>الصف ' + row.rowNum + ':</strong> ' + row.errors.join('، ') + '</span><button class="btn btn-sm btn-primary" onclick="editImportRow(' + row.rowNum + ')">✏️ تصحيح الصف</button></div>'; }).join('') + '</div>' : '';
             if (totalRows === 0) {
                 alert('لم يتم العثور على أي صفوف بيانات صالحة داخل الملف!');
                 currentImportState = null;
@@ -2784,7 +2805,7 @@
 
             let previewTableHtml = '';
             if (type === 'workers') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const sampleRows = [...validRows, ...invalidRows].map(r => {
                     const isErr = r.errors.length > 0;
                     return `
                         <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
@@ -2818,7 +2839,7 @@
                     </table>
                 `;
             } else if (type === 'factories') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const sampleRows = [...validRows, ...invalidRows].map(r => {
                     const isErr = r.errors.length > 0;
                     return `
                         <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
@@ -2848,7 +2869,7 @@
                     </table>
                 `;
             } else if (type === 'supervisors') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const sampleRows = [...validRows, ...invalidRows].map(r => {
                     const isErr = r.errors.length > 0;
                     return `
                         <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
@@ -2902,11 +2923,12 @@
                 ` : ''}
 
                 <div style="margin-bottom:10px; font-weight:bold; color:var(--text-secondary); font-size:0.9rem;">
-                    معاينة عينة من البيانات المقروءة من الملف:
+                    مراجعة جميع البيانات المقروءة من الملف:
                 </div>
                 <div class="table-responsive" style="max-height:260px; overflow-y:auto; margin-bottom:20px;">
                     ${previewTableHtml}
                 </div>
+                ${invalidRowsHtml}
 
                 <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                     <button class="btn btn-danger" onclick="cancelImportProcess()" style="font-weight:bold;">
@@ -2925,6 +2947,98 @@
         function cancelImportProcess() {
             currentImportState = null;
             closeModal();
+        }
+
+        function getAllImportRows() {
+            return currentImportState ? currentImportState.validRows.concat(currentImportState.invalidRows) : [];
+        }
+
+        function escapeImportValue(value) {
+            return String(value == null ? '' : value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        }
+
+        function refreshImportValidation() {
+            if (!currentImportState) return;
+            const allRows = getAllImportRows();
+            const type = currentImportState.type;
+            const existing = type === 'workers' ? DB.get('Workers') : type === 'factories' ? DB.get('Factories') : DB.get('Supervisors');
+
+            allRows.forEach(function(row) {
+                row.errors = [];
+                if (!row.name || !String(row.name).trim()) row.errors.push(type === 'factories' ? 'اسم المصنع مطلوب' : type === 'supervisors' ? 'اسم الإداري مطلوب' : 'اسم العامل مطلوب');
+                if ((type === 'workers' || type === 'supervisors') && (!row.mobile || !String(row.mobile).trim())) row.errors.push(type === 'supervisors' ? 'رقم موبيل العمل مطلوب' : 'رقم الهاتف مطلوب');
+                if (type === 'workers' && (!row.jobTitle || !String(row.jobTitle).trim())) row.errors.push('المسمى الوظيفي إجباري');
+
+                if (row.code && !row.isAutoCode) {
+                    const normalizedCode = String(row.code).trim().toLowerCase();
+                    if (existing.some(function(item) { return String(item.code || '').trim().toLowerCase() === normalizedCode; })) {
+                        row.errors.push('الكود (' + row.code + ') مكرر ومسجل مسبقاً');
+                    }
+                    if (allRows.some(function(other) { return other !== row && !other.isAutoCode && String(other.code || '').trim().toLowerCase() === normalizedCode; })) {
+                        row.errors.push('الكود (' + row.code + ') مكرر داخل ملف الاستيراد');
+                    }
+                }
+
+                if (type === 'workers') {
+                    const factories = DB.get('Factories');
+                    const housing = DB.get('Housing');
+                    const factory = factories.find(function(item) { return Number(item.id) === Number(row.factoryId); });
+                    const building = housing.find(function(item) { return Number(item.id) === Number(row.buildingId); });
+                    row.facNameDisplay = factory ? factory.name : '-';
+                    row.bNameDisplay = building ? (building.name || ('عمارة ' + building.number)) : '-';
+                }
+            });
+
+            currentImportState.validRows = allRows.filter(function(row) { return row.errors.length === 0; });
+            currentImportState.invalidRows = allRows.filter(function(row) { return row.errors.length > 0; });
+        }
+
+        function editImportRow(rowNum) {
+            if (!currentImportState) return;
+            const row = getAllImportRows().find(function(item) { return Number(item.rowNum) === Number(rowNum); });
+            if (!row) return;
+
+            const type = currentImportState.type;
+            let fields = '<div class="form-row"><div class="form-group"><label>الكود</label><input id="import-edit-code" value="' + escapeImportValue(row.isAutoCode ? '' : row.code) + '" placeholder="اتركه فارغًا لإنشاء كود تلقائي"></div><div class="form-group"><label>' + (type === 'factories' ? 'اسم المصنع' : type === 'supervisors' ? 'اسم الإداري' : 'اسم العامل') + ' *</label><input id="import-edit-name" value="' + escapeImportValue(row.name) + '"></div></div>';
+
+            if (type === 'workers') {
+                const factories = DB.get('Factories');
+                const housing = DB.get('Housing');
+                fields += '<div class="form-row"><div class="form-group"><label>رقم الهاتف *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div><div class="form-group"><label>المسمى الوظيفي *</label><input id="import-edit-jobtitle" value="' + escapeImportValue(row.jobTitle) + '"></div></div>';
+                fields += '<div class="form-row"><div class="form-group"><label>المصنع</label><select id="import-edit-factory"><option value="">-- بدون مصنع --</option>' + factories.map(function(f) { return '<option value="' + f.id + '"' + (Number(f.id) === Number(row.factoryId) ? ' selected' : '') + '>' + escapeImportValue(f.name) + '</option>'; }).join('') + '</select></div><div class="form-group"><label>عمارة السكن</label><select id="import-edit-building"><option value="">-- بدون سكن --</option>' + housing.map(function(h) { return '<option value="' + h.id + '"' + (Number(h.id) === Number(row.buildingId) ? ' selected' : '') + '>' + escapeImportValue(h.name || ('عمارة ' + h.number)) + '</option>'; }).join('') + '</select></div></div>';
+            } else if (type === 'supervisors') {
+                fields += '<div class="form-group"><label>رقم موبيل العمل *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div>';
+            } else {
+                fields += '<div class="form-row"><div class="form-group"><label>الهاتف</label><input id="import-edit-phone" value="' + escapeImportValue(row.phone) + '"></div><div class="form-group"><label>العنوان</label><input id="import-edit-address" value="' + escapeImportValue(row.address) + '"></div></div>';
+            }
+
+            openModal('<div class="modal-header"><h3>✏️ تصحيح بيانات الصف ' + row.rowNum + '</h3><button class="modal-close" onclick="showImportPreviewModal()">×</button></div><p class="alert alert-warning">عدّل الحقول ثم احفظ؛ سيعيد النظام التحقق من هذا الصف وكل الصفوف قبل الاستيراد.</p>' + fields + '<div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;"><button class="btn" onclick="showImportPreviewModal()">إلغاء</button><button class="btn btn-success" onclick="saveImportRowEdit(' + row.rowNum + ')">حفظ وإعادة التحقق</button></div>', true);
+        }
+
+        function saveImportRowEdit(rowNum) {
+            if (!currentImportState) return;
+            const row = getAllImportRows().find(function(item) { return Number(item.rowNum) === Number(rowNum); });
+            if (!row) return;
+
+            const code = document.getElementById('import-edit-code').value.trim();
+            row.code = code || (currentImportState.type === 'factories' ? 'FAC-AUTO' : currentImportState.type === 'supervisors' ? 'ADM-AUTO' : 'WRK-AUTO');
+            row.isAutoCode = !code;
+            row.name = document.getElementById('import-edit-name').value.trim();
+
+            if (currentImportState.type === 'workers') {
+                row.mobile = document.getElementById('import-edit-mobile').value.trim();
+                row.jobTitle = document.getElementById('import-edit-jobtitle').value.trim();
+                row.factoryId = document.getElementById('import-edit-factory').value || null;
+                row.buildingId = document.getElementById('import-edit-building').value || '';
+            } else if (currentImportState.type === 'supervisors') {
+                row.mobile = document.getElementById('import-edit-mobile').value.trim();
+            } else {
+                row.phone = document.getElementById('import-edit-phone').value.trim();
+                row.address = document.getElementById('import-edit-address').value.trim();
+            }
+
+            refreshImportValidation();
+            showImportPreviewModal();
         }
 
         function confirmImportExecution() {
