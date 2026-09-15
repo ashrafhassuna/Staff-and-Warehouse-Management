@@ -545,12 +545,37 @@
             th, td { border: 1px solid #555 !important; padding: 7px 9px !important; }
             .print-header { display: block !important; margin-bottom: 20px; }
             @page { margin: 12mm 12mm 42mm 12mm; }
-            .print-signatures { display: grid !important; grid-template-columns: repeat(3, 1fr); direction: rtl; align-items: end; gap: 24px; position: fixed; left: 12mm; right: 12mm; bottom: 10mm; margin: 0; padding: 0; page-break-inside: avoid; }
-            .signature-right { display: contents; }
-            .signature-block { min-width: 0; text-align: center; font-weight: 700; color: #000; }
-            .signature-line { border-top: 1px solid #000; margin-top: 36px; padding-top: 6px; font-size: 10pt; font-weight: 400; }
+            .print-signatures {
+                display: flex !important;
+                justify-content: space-between;
+                align-items: flex-end;
+                gap: 18px;
+                position: fixed;
+                left: 12mm;
+                right: 12mm;
+                bottom: 10mm;
+                margin: 0;
+                padding: 0;
+                direction: rtl;
+                page-break-inside: avoid;
+            }
+            .signature-block {
+                flex: 1;
+                min-width: 0;
+                text-align: center;
+                font-weight: 700;
+                color: #000;
+                font-size: 11pt;
+            }
+            .signature-line {
+                width: 78%;
+                margin: 38px auto 0;
+                border-top: 1.5px solid #000;
+                padding-top: 6px;
+                font-size: 10pt;
+                font-weight: 400;
+            }
             .footer { display: none !important; }
-            .print-signatures { display: flex !important; }
             .no-print-in-table { display: none !important; }
         }
         .print-header, .print-signatures { display: none; }
@@ -730,16 +755,14 @@
             <!-- Dynamic Views are Rendered Here -->
         </div>
 
-        <div id="print-signatures" class="print-signatures">
-            <div class="signature-right">
-                <div class="signature-block">
-                    مدير التشغيل
-                    <div class="signature-line">الاسم والتوقيع</div>
-                </div>
-                <div class="signature-block">
-                    مدير الموارد البشرية
-                    <div class="signature-line">الاسم والتوقيع</div>
-                </div>
+        <div id="print-signatures" class="print-signatures" aria-label="توقيعات التقرير">
+            <div class="signature-block">
+                مدير التشغيل
+                <div class="signature-line">الاسم والتوقيع</div>
+            </div>
+            <div class="signature-block">
+                مدير الموارد البشرية
+                <div class="signature-line">الاسم والتوقيع</div>
             </div>
             <div class="signature-block">
                 المدير العام
