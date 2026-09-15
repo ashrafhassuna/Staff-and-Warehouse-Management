@@ -609,6 +609,7 @@
                 direction: rtl;
                 page-break-inside: avoid;
                 z-index: 2;
+                margin-top: 14mm;
             }
             .signature-block {
                 flex: 1;
@@ -6302,7 +6303,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
             const reportTitle = document.getElementById('print-report-title');
             if (reportTitle) {
-                reportTitle.textContent = title || 'تقرير العاملين والعهد';
+                reportTitle.textContent = 'تقرير العاملين والعهد';
             }
 
             window.print();
