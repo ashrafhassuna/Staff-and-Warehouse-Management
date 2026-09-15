@@ -548,10 +548,11 @@
             .signature-right { display: flex; gap: 28px; }
             .signature-block { min-width: 155px; text-align: center; font-weight: 700; color: #000; }
             .signature-line { border-top: 1px solid #000; margin-top: 46px; padding-top: 6px; font-size: 10pt; font-weight: 400; }
-            .footer { display: block !important; position: fixed; bottom: 0; width: 100%; font-size: 10pt; }
+            .footer { display: none !important; }
+            .print-signatures { display: flex !important; }
             .no-print-in-table { display: none !important; }
         }
-        .print-header { display: none; }
+        .print-header, .print-signatures { display: none; }
     </style>
 
     <!-- ====== Firebase SDK ====== -->
@@ -722,26 +723,27 @@
                 <h3 id="print-report-title" style="font-size:1.35rem; color:#111; font-weight:bold; margin-bottom:4px;"></h3>
                 <p id="print-date" style="font-size:0.85rem; color:#666;"></p>
             </div>
-            <div id="print-signatures" class="print-signatures">
-                <div class="signature-right">
-                    <div class="signature-block">
-                        مدير التشغيل
-                        <div class="signature-line">الاسم والتوقيع</div>
-                    </div>
-                    <div class="signature-block">
-                        مدير الموارد البشرية
-                        <div class="signature-line">الاسم والتوقيع</div>
-                    </div>
-                </div>
-                <div class="signature-block">
-                    المدير العام
-                    <div class="signature-line">الاسم والتوقيع</div>
-                </div>
-            </div>
         </div>
 
         <div class="view-container" id="view-container">
             <!-- Dynamic Views are Rendered Here -->
+        </div>
+
+        <div id="print-signatures" class="print-signatures">
+            <div class="signature-right">
+                <div class="signature-block">
+                    مدير التشغيل
+                    <div class="signature-line">الاسم والتوقيع</div>
+                </div>
+                <div class="signature-block">
+                    مدير الموارد البشرية
+                    <div class="signature-line">الاسم والتوقيع</div>
+                </div>
+            </div>
+            <div class="signature-block">
+                المدير العام
+                <div class="signature-line">الاسم والتوقيع</div>
+            </div>
         </div>
 
         <footer class="footer">
