@@ -3053,8 +3053,9 @@
 
             if (type === 'workers') {
                 const workers = DB.get('Workers');
+                let nextWorkerId = DB.nextId('Workers');
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Workers');
+                    const newId = nextWorkerId++;
                     const finalCode = r.isAutoCode ? `WRK-${newId}` : r.code;
                     workers.push({
                         id: newId,
@@ -3081,8 +3082,9 @@
 
             } else if (type === 'factories') {
                 const factories = DB.get('Factories');
+                let nextFactoryId = DB.nextId('Factories');
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Factories');
+                    const newId = nextFactoryId++;
                     const finalCode = r.isAutoCode ? `FAC-${newId}` : r.code;
                     factories.push({
                         id: newId,
@@ -3105,8 +3107,9 @@
 
             } else if (type === 'supervisors') {
                 const supervisors = DB.get('Supervisors');
+                let nextSupervisorId = DB.nextId('Supervisors');
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Supervisors');
+                    const newId = nextSupervisorId++;
                     const finalCode = r.isAutoCode ? `ADM-${newId}` : r.code;
                     supervisors.push({
                         id: newId,
