@@ -543,7 +543,7 @@
                 color: #000 !important;
                 font-size: 12pt;
                 display: block;
-                padding-bottom: 40mm;
+                padding-bottom: 0;
             }
             .main-content {
                 margin: 0 !important;
@@ -555,14 +555,19 @@
                 padding: 0 !important;
                 margin-top: 10px !important;
                 margin-bottom: 0 !important;
-                padding-bottom: 42mm !important;
+                padding-bottom: 0 !important;
             }
             table {
                 width: 100% !important;
                 border-collapse: collapse;
                 font-size: 12pt !important;
+                page-break-inside: auto;
             }
             th, td { border: 1px solid #555 !important; padding: 9px 10px !important; }
+            thead { display: table-header-group; }
+            tbody { display: table-row-group; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            .table-responsive { overflow: visible !important; }
             .print-header {
                 display: block !important;
                 margin-bottom: 18px;
@@ -593,7 +598,7 @@
                 margin: 0;
                 padding: 0 8px;
             }
-            @page { margin: 10mm 10mm 46mm 10mm; }
+            @page { margin: 10mm 10mm 50mm 10mm; }
             .print-signatures {
                 display: flex !important;
                 justify-content: space-between;
