@@ -3994,8 +3994,13 @@
             openModal(`
                 <div class="modal-header"><h3>➕ تسكين عامل بالشقة رقم: ${aptNumber}</h3><button class="modal-close" onclick="closeModal()">×</button></div>
                 <div class="form-group">
+                    <label>ابحث عن العامل بالاسم أو الكود *</label>
+                    <input type="search" id="assign-worker-search" placeholder="اكتب اسم العامل أو الكود أو الرقم القومي" oninput="filterHousingWorkerOptions(this.value)">
+                </div>
+                <div class="form-group">
                     <label>اختر العامل لتسكينه في هذه الشقة *</label>
-                    <select id="assign-worker-id" style="width:100%; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem;">
+                    <select id="assign-worker-id" size="6" style="width:100%; min-height:150px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem;">
+                        <option value="">-- اختر العامل --</option>
                         ${workers.map(w => `<option value="${w.id}">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</option>`).join('')}
                     </select>
                 </div>
@@ -4004,6 +4009,18 @@
                     <button class="btn btn-primary" onclick="saveWorkerHousingAssignment(${buildingId}, '${aptNumber}')">💾 تأكيد التسكين</button>
                 </div>
             `);
+            window._housingAssignWorkers = workers;
+        }
+
+        function filterHousingWorkerOptions(search) {
+            const select = document.getElementById('assign-worker-id');
+            if (!select) return;
+            const query = String(search || '').trim().toLowerCase();
+            const workers = window._housingAssignWorkers || [];
+            select.innerHTML = `<option value="">-- اختر العامل --</option>` + workers
+                .filter(w => `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
+                .map(w => `<option value="${w.id}">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</option>`)
+                .join('');
         }
 
         function saveWorkerHousingAssignment(buildingId, aptNumber) {
