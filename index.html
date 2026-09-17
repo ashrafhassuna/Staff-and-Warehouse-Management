@@ -412,6 +412,12 @@
         }
         .form-row { display: flex; gap: 12px; }
         .form-row .form-group { flex: 1; }
+        .issue-worker-fields {
+            display: grid;
+            grid-template-columns: minmax(240px, 1.5fr) minmax(220px, 1.5fr) minmax(150px, .8fr) minmax(110px, .5fr);
+            gap: 10px;
+            align-items: end;
+        }
 
         /* Badges & Alerts */
         .badge { padding: 4px 9px; border-radius: 12px; font-size: 0.8rem; font-weight: bold; display: inline-block; }
@@ -546,6 +552,9 @@
             .form-row {
                 flex-direction: column;
                 gap: 0;
+            }
+            .issue-worker-fields {
+                grid-template-columns: 1fr;
             }
         }
 
@@ -5752,11 +5761,11 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             container.innerHTML = rows.map((row, index) => `
                 <div class="issue-worker-row" data-row-index="${index}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; background:var(--surface);">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                        <strong>صرف رقم ${index + 1}</strong>
+                        <strong>صف صرف ${index + 1}</strong>
                         ${rows.length > 1 ? `<button type="button" class="btn btn-danger" onclick="removeIssueWorkerRow(${index})">🗑️ حذف</button>` : ''}
                     </div>
-                    <div class="form-row">
-                        <div class="form-group">
+                    <div class="issue-worker-fields">
+                        <div class="form-group" style="margin:0;">
                             <label>بحث عن العامل *</label>
                             <input type="search" placeholder="اكتب الكود أو الاسم أو الرقم القومي" value="${row.search || ''}" oninput="filterIssueWorkerRow(${index}, this.value)">
                             <select id="m-iss-worker-${index}" onchange="updateIssueWorkerRow(${index}, 'workerId', this.value)" style="margin-top:6px;">
@@ -5764,27 +5773,25 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                                 ${issueWorkerOptions(row.search, row.workerId)}
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="margin:0;">
                             <label>صنف العهدة *</label>
                             <select onchange="updateIssueWorkerRow(${index}, 'itemId', this.value); refreshIssueWorkerStock(${index})">
                                 <option value="">-- اختر الصنف --</option>${issueItemOptions(row.itemId)}
                             </select>
                         </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
+                        <div class="form-group" style="margin:0;">
                             <label>الحالة *</label>
                             <select onchange="updateIssueWorkerRow(${index}, 'condition', this.value); refreshIssueWorkerStock(${index})">
                                 <option value="NEW" ${row.condition === 'NEW' ? 'selected' : ''}>جديد (NEW)</option>
                                 <option value="RETURNED_USED" ${row.condition === 'RETURNED_USED' ? 'selected' : ''}>مستعمل صالح (RETURNED_USED)</option>
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div class="form-group" style="margin:0;">
                             <label>الكمية *</label>
                             <input type="number" min="1" value="${row.quantity || 1}" onchange="updateIssueWorkerRow(${index}, 'quantity', this.value); refreshIssueWorkerStock(${index})">
                         </div>
                     </div>
-                    <div id="m-iss-worker-stock-${index}" style="font-weight:bold; color:var(--primary);"></div>
+                    <div id="m-iss-worker-stock-${index}" style="font-weight:bold; color:var(--primary); margin-top:8px;"></div>
                 </div>
             `).join('');
             rows.forEach((_, index) => refreshIssueWorkerStock(index));
