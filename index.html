@@ -5790,12 +5790,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const notes = document.getElementById('stk-notes').value.trim();
             const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
 
+            if (!whId || !itemId) { alert('يرجى اختيار المخزن والصنف'); return; }
             if (!qty || qty <= 0) { alert('يرجى كتابة كمية صحيحة'); return; }
 
             const txs = DB.get('Transactions');
             const newTx = {
                 id: DB.nextId('Transactions'),
-                date: (targetType === 'WORKER' ? new Date().toISOString().split('T')[0] : date) || new Date().toISOString().split('T')[0],
+                date: date || new Date().toISOString().split('T')[0],
                 type: 'STOCK_IN', warehouseId: whId, workerId: null, itemId: itemId,
                 quantity: qty, condition: cond, operator: op, notes: notes
             };
