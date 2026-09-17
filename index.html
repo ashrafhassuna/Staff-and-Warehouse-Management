@@ -5651,8 +5651,8 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
                 <!-- 1. Worker Target -->
                 <div id="iss-container-worker" class="form-group" style="${preTargetType==='WORKER'?'':'display:none;'}">
-                    <label>${t('worker')} *</label>
-                    <select id="m-iss-worker">
+                    <label>${t('worker')} * <small style="color:var(--text-secondary);">يمكن اختيار أكثر من عامل (نفس الصنف والكمية لكل عامل)</small></label>
+                    <select id="m-iss-worker" multiple size="6" style="min-height:130px;">
                         ${activeWorkers.map(w => `<option value="${w.id}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name}</option>`).join('')}
                     </select>
                 </div>
@@ -5757,16 +5757,20 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const alertBox = document.getElementById('modal-issue-alert');
 
             let workerId = null;
+            let workerIds = [];
             let supervisorId = null;
             let buildingId = null;
             let apt = null;
 
             if (targetType === 'WORKER') {
-                workerId = Number(document.getElementById('m-iss-worker')?.value);
-                if (!workerId) {
-                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار العامل المراد صرف العهدة له</div>`;
+                workerIds = Array.from(document.getElementById('m-iss-worker')?.selectedOptions || [])
+                    .map(option => Number(option.value))
+                    .filter(Boolean);
+                if (!workerIds.length) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار عامل واحد على الأقل لصرف العهدة له</div>`;
                     return;
                 }
+                workerId = workerIds[0];
             } else if (targetType === 'SUPERVISOR') {
                 supervisorId = Number(document.getElementById('m-iss-supervisor')?.value);
                 if (!supervisorId) {
@@ -5788,20 +5792,22 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 return;
             }
 
+            const issueCount = targetType === 'WORKER' ? workerIds.length : 1;
+            const totalQty = qty * issueCount;
             const currentStock = getStock(whId, itemId, cond);
-            if (currentStock < qty) {
-                alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} (المتاح حالياً: ${currentStock})</div>`;
+            if (currentStock < totalQty) {
+                alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} (المطلوب إجمالاً: ${totalQty}، المتاح حالياً: ${currentStock})</div>`;
                 return;
             }
 
             const txs = DB.get('Transactions');
-            const newTx = {
-                id: DB.nextId('Transactions'),
+            const newTransactions = (targetType === 'WORKER' ? workerIds : [null]).map((selectedWorkerId, index) => ({
+                id: DB.nextId('Transactions') + index,
                 date: date || new Date().toISOString().split('T')[0],
                 type: 'ISSUE',
                 targetType: targetType,
                 warehouseId: whId,
-                workerId: workerId,
+                workerId: selectedWorkerId,
                 supervisorId: supervisorId,
                 buildingId: buildingId,
                 apartment: apt,
@@ -5810,18 +5816,21 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 condition: cond,
                 operator: op,
                 notes: notes
-            };
-            txs.push(newTx); DB.set('Transactions', txs);
+            }));
+            txs.push(...newTransactions); DB.set('Transactions', txs);
 
-            let auditDesc = `صرف ${qty} قطعة`;
-            if (targetType === 'WORKER') auditDesc += ` للعامل #${workerId}`;
-            if (targetType === 'SUPERVISOR') auditDesc += ` عهدة إدارية للمشرف #${supervisorId}`;
-            if (targetType === 'HOUSING') auditDesc += ` لسكن عمارة #${buildingId} ${apt ? `شقة ${apt}` : ''}`;
-
-            logAudit('Transactions', 'ISSUE', newTx.id, null, newTx, auditDesc);
+            newTransactions.forEach(newTx => {
+                let auditDesc = `صرف ${qty} قطعة`;
+                if (targetType === 'WORKER') auditDesc += ` للعامل #${newTx.workerId}`;
+                if (targetType === 'SUPERVISOR') auditDesc += ` عهدة إدارية للمشرف #${supervisorId}`;
+                if (targetType === 'HOUSING') auditDesc += ` لسكن عمارة #${buildingId} ${apt ? `شقة ${apt}` : ''}`;
+                logAudit('Transactions', 'ISSUE', newTx.id, null, newTx, auditDesc);
+            });
 
             closeModal();
-            alert('تم صرف العهدة بنجاح!');
+            alert(targetType === 'WORKER' && workerIds.length > 1
+                ? `تم صرف ${qty} قطعة لكل عامل لعدد ${workerIds.length} عمال بنجاح!`
+                : 'تم صرف العهدة بنجاح!');
             if (targetType === 'SUPERVISOR') navigate('supervisors');
             else if (targetType === 'HOUSING') navigate('housing', { selectedBuildingId: buildingId });
             else if (returnWhId) navigate('warehouses', { selectedWarehouseId: returnWhId });
