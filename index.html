@@ -426,9 +426,20 @@
         .form-row .form-group { flex: 1; }
         .issue-worker-fields {
             display: grid;
-            grid-template-columns: minmax(240px, 1.5fr) minmax(220px, 1.5fr) minmax(150px, .8fr) minmax(110px, .5fr);
+            grid-template-columns: minmax(190px, 1.15fr) minmax(180px, 1fr) minmax(170px, .9fr) minmax(90px, .42fr);
             gap: 10px;
             align-items: end;
+        }
+        .issue-worker-fields input,
+        .issue-worker-fields select {
+            padding: 8px 9px;
+            font-size: 0.88rem;
+        }
+        .issue-worker-stock {
+            color: var(--primary);
+            font-size: 0.8rem;
+            font-weight: bold;
+            margin-top: 5px;
         }
 
         /* Badges & Alerts */
@@ -3660,7 +3671,6 @@
                     🏢 عمارة ${b.number || ''} ${b.name ? `(${b.name})` : ''}
                 </button>
             `).join('');
-
             // Apartments cards
             let aptCards = apts.map(apt => {
                 const aptWorkers = buildingWorkers.filter(w => String(w.apartment) === String(apt.number));
@@ -5666,6 +5676,10 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     </div>
                 </div>
                 <div id="modal-issue-alert"></div>
+                <div class="form-group" style="margin-bottom:15px;">
+                    <label>${t('date')} *</label>
+                    <input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}">
+                </div>
                 
                 <div class="form-group" style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border); margin-bottom:15px;">
                     <label style="font-weight:bold; margin-bottom:8px; display:block;">🎯 نوع / جهة صرف العهدة:</label>
@@ -5749,7 +5763,6 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <div class="form-group"><label>${t('quantity')} *</label><input type="number" id="m-iss-qty" value="1" min="1"></div>
                 </div>
                 <div id="m-iss-avail-display" style="margin-bottom:12px; font-weight:bold; color:var(--primary);"></div>
-                <div id="iss-common-date" class="form-group"><label>${t('date')} *</label><input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}"></div>
                 <div class="form-group"><label>${t('notes')}</label><textarea id="m-iss-notes" placeholder="ملاحظات الصرف"></textarea></div>
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
                     <button class="btn" onclick="closeModal()">${t('cancel')}</button>
@@ -5808,10 +5821,11 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                             <select onchange="updateIssueWorkerRow(${index}, 'itemId', this.value); refreshIssueWorkerStock(${index})">
                                 <option value="">-- اختر الصنف --</option>${issueItemOptions(row.itemId)}
                             </select>
+                            <div id="m-iss-worker-stock-${index}" class="issue-worker-stock"></div>
                         </div>
                         <div class="form-group" style="margin:0;">
                             <label>المخزن المنصرف منه *</label>
-                            <select onchange="updateIssueWorkerRow(${index}, 'warehouseId', this.value)">
+                            <select onchange="updateIssueWorkerRow(${index}, 'warehouseId', this.value); refreshIssueWorkerStock(${index})">
                                 <option value="">-- اختر المخزن --</option>
                                 ${(window._issueWarehouses || []).map(w => `<option value="${w.id}" ${Number(row.warehouseId) === Number(w.id) ? 'selected' : ''}>${w.name}</option>`).join('')}
                             </select>
@@ -5823,6 +5837,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     </div>
                 </div>
             `).join('');
+            rows.forEach((_, index) => refreshIssueWorkerStock(index));
         }
 
         function addIssueWorkerRow() {
@@ -5855,7 +5870,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function refreshIssueWorkerStock(index) {
             const row = window._issueWorkerRows?.[index];
-            return row;
+            const display = document.getElementById(`m-iss-worker-stock-${index}`);
+            if (!row || !display || !row.warehouseId || !row.itemId) {
+                if (display) display.textContent = '';
+                return;
+            }
+            const stock = getStock(row.warehouseId, row.itemId, 'NEW');
+            display.textContent = `المتاح: ${stock} قطعة`;
         }
 
         function toggleIssueTargetFields() {
@@ -5867,7 +5888,6 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             document.getElementById('iss-common-item').style.display = targetType === 'WORKER' ? 'none' : 'block';
             document.getElementById('iss-common-condition-quantity').style.display = targetType === 'WORKER' ? 'none' : 'flex';
             document.getElementById('m-iss-avail-display').style.display = targetType === 'WORKER' ? 'none' : 'block';
-            document.getElementById('iss-common-date').style.display = targetType === 'WORKER' ? 'none' : 'block';
         }
 
         function openIssueModalForHousing(buildingId, aptNumber = null) {
