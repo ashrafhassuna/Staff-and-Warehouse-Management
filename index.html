@@ -1450,6 +1450,7 @@
                 if (Number(tx.warehouseId) === Number(warehouseId) && Number(tx.itemId) === Number(itemId)) {
                     if (tx.type === 'STOCK_IN' && tx.condition === condition) balance += Number(tx.quantity);
                     if (tx.type === 'ISSUE' && tx.condition === condition) balance -= Number(tx.quantity);
+                    if (tx.type === 'DESTROY' && tx.condition === condition) balance -= Number(tx.quantity);
                     if (tx.type === 'RETURN_USED' && condition === 'RETURNED_USED') balance += Number(tx.quantity);
                     if (tx.type === 'DAMAGED' && condition === 'DAMAGED') balance += Number(tx.quantity);
                     if (tx.type === 'LOST' && condition === 'LOST') balance += Number(tx.quantity);
@@ -1459,6 +1460,7 @@
                         if (orig && Number(orig.warehouseId) === Number(warehouseId) && Number(orig.itemId) === Number(itemId)) {
                             if (orig.type === 'STOCK_IN' && orig.condition === condition) balance -= Number(orig.quantity);
                             if (orig.type === 'ISSUE' && orig.condition === condition) balance += Number(orig.quantity);
+                            if (orig.type === 'DESTROY' && orig.condition === condition) balance += Number(orig.quantity);
                             if (orig.type === 'RETURN_USED' && condition === 'RETURNED_USED') balance -= Number(orig.quantity);
                             if (orig.type === 'DAMAGED' && condition === 'DAMAGED') balance -= Number(orig.quantity);
                             if (orig.type === 'LOST' && condition === 'LOST') balance -= Number(orig.quantity);
@@ -2214,6 +2216,7 @@
                         <button class="btn btn-primary" onclick="openWarehouseAddModal()">${t('add_warehouse')}</button>
                         <button class="btn" onclick="openAllItemsManageModal()">${t('manage_items')}</button>
                         <button class="btn btn-success" onclick="openAddStockModal()">${t('add_stock_btn')}</button>
+                        <button class="btn btn-danger" onclick="openDestroyStockModal()">🗑️ إعدام مخزون</button>
                         <button class="btn" onclick="openIssueModal()">${t('issue_btn')}</button>
                         <button class="btn" onclick="openReturnModal()">${t('return_custody')}</button>
                     </div>
@@ -2283,6 +2286,7 @@
                 if (tx.type === 'RETURN_USED') { typeBadge = 'badge-success'; typeLabel = 'رد مستعمل صالح'; }
                 if (tx.type === 'DAMAGED') { typeBadge = 'badge-danger'; typeLabel = 'تالف (Damaged)'; }
                 if (tx.type === 'LOST') { typeBadge = 'badge-danger'; typeLabel = 'مفقود (Lost)'; }
+                if (tx.type === 'DESTROY') { typeBadge = 'badge-danger'; typeLabel = 'إعدام مخزني'; }
                 if (tx.type === 'REVERSAL') { typeBadge = 'badge-warning'; typeLabel = 'عكس قيد (Reversal)'; }
 
                 return `
@@ -2312,6 +2316,7 @@
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="openCustodyItemAddModal(${wh.id})">➕ إضافة منتج جديد</button>
                         <button class="btn btn-success" onclick="openAddStockModalForWh(${wh.id})">📥 توريد كمية لهذا المخزن</button>
+                        <button class="btn btn-danger" onclick="openDestroyStockModal(${wh.id})">🗑️ إعدام كمية</button>
                         <button class="btn" onclick="openIssueModalForWh(${wh.id})">📤 صرف من هذا المخزن</button>
                         <button class="btn" onclick="openWarehouseEditModal(${wh.id})">✏️ تعديل المخزن</button>
                         <button class="btn btn-danger" onclick="deleteWarehouse(${wh.id})">🗑️ حذف هذا المخزن</button>
@@ -4403,7 +4408,7 @@
                     successMsg = `تم استرجاع الشقة المحذوفة بنجاح.`;
 
                 // 4. TRANSACTION Actions: Issue, Stock In, Return Used, Damaged, Lost
-                } else if (['ISSUE', 'STOCK_IN', 'RETURN_USED', 'DAMAGED', 'LOST'].includes(action)) {
+                } else if (['ISSUE', 'STOCK_IN', 'RETURN_USED', 'DAMAGED', 'LOST', 'DESTROY'].includes(action)) {
                     const txs = DB.get('Transactions');
                     const origTx = txs.find(t => Number(t.id) === recId);
                     if (!origTx) throw new Error('حركة العهدة الأصلية غير موجودة في سجل المعاملات');
@@ -4701,7 +4706,7 @@
                     successMsg = `تمت إعادة حذف الشقة كما كان في الأصل.`;
 
                 // 4. TRANSACTION Actions: Remove the REVERSAL transaction that cancelled it
-                } else if (['ISSUE', 'STOCK_IN', 'RETURN_USED', 'DAMAGED', 'LOST'].includes(action)) {
+                } else if (['ISSUE', 'STOCK_IN', 'RETURN_USED', 'DAMAGED', 'LOST', 'DESTROY'].includes(action)) {
                     const txs = DB.get('Transactions');
                     const revTxId = rbState.reversalTransactionId;
                     let filteredTxs = txs;
@@ -5629,6 +5634,100 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function openAddStockModalForWh(whId) { openAddStockModal(whId, null); }
         function openQuickAddStockModal(whId, itemId) { openAddStockModal(whId, itemId); }
+
+        function openDestroyStockModal(preWhId = null, preItemId = null) {
+            const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            openModal(`
+                <div class="modal-header"><h3>🗑️ إعدام كمية من المخزون</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div id="m-destroy-alert"></div>
+                <div class="form-group">
+                    <label>${t('warehouse')} *</label>
+                    <select id="m-destroy-wh" onchange="refreshDestroyStock()">
+                        <option value="">-- اختر المخزن --</option>
+                        ${warehouses.map(w => `<option value="${w.id}" ${Number(preWhId) === Number(w.id) ? 'selected' : ''}>${w.name}</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>${t('item')} *</label>
+                    <select id="m-destroy-item" onchange="refreshDestroyStock()">
+                        <option value="">-- اختر الصنف --</option>
+                        ${items.map(i => `<option value="${i.id}" ${Number(preItemId) === Number(i.id) ? 'selected' : ''}>${i.name} (${i.unit || 'قطعة'})</option>`).join('')}
+                    </select>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>حالة المخزون *</label>
+                        <select id="m-destroy-condition" onchange="refreshDestroyStock()">
+                            <option value="NEW">جديد</option>
+                            <option value="RETURNED_USED">مستعمل صالح</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>الكمية المراد إعدامها *</label>
+                        <input type="number" id="m-destroy-qty" min="1" value="1" oninput="refreshDestroyStock()">
+                    </div>
+                </div>
+                <div id="m-destroy-available" style="font-weight:bold; color:var(--primary); margin-bottom:12px;"></div>
+                <div class="form-group">
+                    <label>سبب الإعدام *</label>
+                    <textarea id="m-destroy-reason" placeholder="اكتب سبب إعدام الكمية بالتفصيل"></textarea>
+                </div>
+                <div class="form-group"><label>${t('date')} *</label><input type="date" id="m-destroy-date" value="${new Date().toISOString().split('T')[0]}"></div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                    <button class="btn" onclick="closeModal()">${t('cancel')}</button>
+                    <button class="btn btn-danger" onclick="submitDestroyStock()">🗑️ تأكيد الإعدام</button>
+                </div>
+            `);
+            refreshDestroyStock();
+        }
+
+        function refreshDestroyStock() {
+            const whId = document.getElementById('m-destroy-wh')?.value;
+            const itemId = document.getElementById('m-destroy-item')?.value;
+            const condition = document.getElementById('m-destroy-condition')?.value;
+            const display = document.getElementById('m-destroy-available');
+            if (!display || !whId || !itemId) {
+                if (display) display.textContent = '';
+                return;
+            }
+            const available = getStock(whId, itemId, condition);
+            const qty = Number(document.getElementById('m-destroy-qty')?.value) || 0;
+            display.textContent = `المتاح: ${available} قطعة${qty > available ? ' — الكمية المطلوبة أكبر من الرصيد' : ''}`;
+            display.style.color = qty > available ? 'var(--danger)' : 'var(--primary)';
+        }
+
+        function submitDestroyStock() {
+            const whId = Number(document.getElementById('m-destroy-wh')?.value);
+            const itemId = Number(document.getElementById('m-destroy-item')?.value);
+            const condition = document.getElementById('m-destroy-condition')?.value;
+            const quantity = Number(document.getElementById('m-destroy-qty')?.value);
+            const reason = document.getElementById('m-destroy-reason')?.value.trim();
+            const date = document.getElementById('m-destroy-date')?.value || new Date().toISOString().split('T')[0];
+            const alertBox = document.getElementById('m-destroy-alert');
+            const available = getStock(whId, itemId, condition);
+            if (!whId || !itemId || !quantity || quantity <= 0 || !reason) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار المخزن والصنف والكمية وكتابة سبب الإعدام</div>`;
+                return;
+            }
+            if (quantity > available) {
+                alertBox.innerHTML = `<div class="alert alert-danger">الكمية المطلوبة (${quantity}) أكبر من الرصيد المتاح (${available})</div>`;
+                return;
+            }
+            const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
+            const tx = {
+                id: DB.nextId('Transactions'), date, type: 'DESTROY',
+                warehouseId: whId, workerId: null, itemId, quantity, condition,
+                operator: op, notes: `إعدام مخزون: ${reason}`
+            };
+            const txs = DB.get('Transactions');
+            txs.push(tx);
+            DB.set('Transactions', txs);
+            logAudit('Transactions', 'DESTROY', tx.id, null, tx, `إعدام ${quantity} من الصنف بسبب: ${reason}`);
+            closeModal();
+            alert('تم إعدام الكمية وتسجيل السبب بنجاح.');
+            navigate('warehouses', { selectedWarehouseId: whId });
+        }
 
         function submitStockIn(returnWhId = null) {
             const whId = Number(document.getElementById('stk-wh').value);
