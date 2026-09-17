@@ -3998,11 +3998,15 @@
                     <input type="search" id="assign-worker-search" placeholder="اكتب اسم العامل أو الكود أو الرقم القومي" oninput="filterHousingWorkerOptions(this.value)">
                 </div>
                 <div class="form-group">
-                    <label>اختر العامل لتسكينه في هذه الشقة *</label>
-                    <select id="assign-worker-id" size="6" onchange="selectHousingWorkerAutomatically()" style="width:100%; min-height:150px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem;">
-                        <option value="">-- اختر العامل --</option>
-                        ${workers.map(w => `<option value="${w.id}">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</option>`).join('')}
-                    </select>
+                    <label>اختر عاملًا أو أكثر لتسكينهم في هذه الشقة *</label>
+                    <div id="assign-worker-list" style="max-height:260px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg); padding:6px;">
+                        ${workers.map(w => `
+                            <label style="display:flex; align-items:center; gap:8px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
+                                <input type="checkbox" class="assign-worker-check" value="${w.id}" onchange="updateHousingWorkerSelection()">
+                                <span>${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
+                            </label>
+                        `).join('')}
+                    </div>
                     <div id="assign-worker-selected" class="alert alert-success" style="display:none; margin-top:8px; margin-bottom:0;"></div>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
@@ -4011,47 +4015,63 @@
                 </div>
             `);
             window._housingAssignWorkers = workers;
+            window._housingSelectedWorkerIds = new Set();
         }
 
         function filterHousingWorkerOptions(search) {
-            const select = document.getElementById('assign-worker-id');
-            if (!select) return;
+            const list = document.getElementById('assign-worker-list');
+            if (!list) return;
             const query = String(search || '').trim().toLowerCase();
             const workers = window._housingAssignWorkers || [];
-            select.innerHTML = `<option value="">-- اختر العامل --</option>` + workers
+            list.innerHTML = workers
                 .filter(w => `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
-                .map(w => `<option value="${w.id}">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</option>`)
+                .map(w => `
+                    <label style="display:flex; align-items:center; gap:8px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
+                        <input type="checkbox" class="assign-worker-check" value="${w.id}" ${window._housingSelectedWorkerIds?.has(Number(w.id)) ? 'checked' : ''} onchange="updateHousingWorkerSelection()">
+                        <span>${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
+                    </label>
+                `)
                 .join('');
         }
 
-        function selectHousingWorkerAutomatically() {
-            const select = document.getElementById('assign-worker-id');
+        function updateHousingWorkerSelection() {
             const display = document.getElementById('assign-worker-selected');
-            const worker = (window._housingAssignWorkers || []).find(w => Number(w.id) === Number(select?.value));
+            const checks = document.querySelectorAll('.assign-worker-check');
+            const selected = window._housingSelectedWorkerIds || new Set();
+            checks.forEach(check => {
+                if (check.checked) selected.add(Number(check.value));
+                else selected.delete(Number(check.value));
+            });
+            window._housingSelectedWorkerIds = selected;
             if (!display) return;
-            if (!worker) {
+            if (!selected.size) {
                 display.textContent = '';
                 display.style.display = 'none';
                 return;
             }
-            display.textContent = `تم اختيار العامل: ${worker.code} - ${worker.name}`;
+            display.textContent = `تم اختيار ${selected.size} عامل/عمال للتسكين`;
             display.style.display = 'block';
         }
 
         function saveWorkerHousingAssignment(buildingId, aptNumber) {
-            const wId = Number(document.getElementById('assign-worker-id').value);
-            if (!wId) { alert('يرجى البحث عن العامل ثم اختياره من القائمة'); return; }
+            const selectedIds = Array.from(window._housingSelectedWorkerIds || []);
+            if (!selectedIds.length) { alert('يرجى اختيار عامل واحد على الأقل من القائمة'); return; }
 
             const workers = DB.get('Workers');
-            const idx = workers.findIndex(w => Number(w.id) === wId);
-            if (idx === -1) return;
-
-            const old = { ...workers[idx] };
-            workers[idx].buildingId = buildingId;
-            workers[idx].apartment = String(aptNumber);
+            const assignedWorkers = [];
+            selectedIds.forEach(wId => {
+                const idx = workers.findIndex(w => Number(w.id) === Number(wId));
+                if (idx === -1) return;
+                const old = { ...workers[idx] };
+                workers[idx].buildingId = buildingId;
+                workers[idx].apartment = String(aptNumber);
+                assignedWorkers.push({ workerId: wId, old, updated: workers[idx] });
+            });
             DB.set('Workers', workers);
 
-            logAudit('Workers', 'ASSIGN_HOUSING', wId, old, workers[idx], `تسكين العامل ${workers[idx].name} بالشقة ${aptNumber} بعمارة ${buildingId}`);
+            assignedWorkers.forEach(assignment => {
+                logAudit('Workers', 'ASSIGN_HOUSING', assignment.workerId, assignment.old, assignment.updated, `تسكين العامل ${assignment.updated.name} بالشقة ${aptNumber} بعمارة ${buildingId}`);
+            });
             closeModal();
             navigate('housing', { selectedBuildingId: buildingId });
         }
