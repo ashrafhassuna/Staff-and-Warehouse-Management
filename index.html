@@ -426,7 +426,7 @@
         .form-row .form-group { flex: 1; }
         .issue-worker-fields {
             display: grid;
-            grid-template-columns: minmax(190px, 1.15fr) minmax(180px, 1fr) minmax(170px, .9fr) minmax(90px, .42fr);
+            grid-template-columns: minmax(200px, 1.25fr) minmax(170px, 1fr) minmax(170px, 1fr) minmax(120px, .8fr) minmax(90px, .42fr);
             gap: 10px;
             align-items: end;
         }
@@ -5982,6 +5982,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
+                            <label>الحالة *</label>
+                            <select onchange="updateIssueWorkerRow(${index}, 'condition', this.value); refreshIssueWorkerStock(${index})">
+                                <option value="NEW" ${row.condition === 'NEW' ? 'selected' : ''}>جديد (NEW)</option>
+                                <option value="RETURNED_USED" ${row.condition === 'RETURNED_USED' ? 'selected' : ''}>مستعمل صالح (RETURNED_USED)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
                             <label>الكمية *</label>
                             <input type="number" min="1" value="${row.quantity || 1}" onchange="updateIssueWorkerRow(${index}, 'quantity', this.value); refreshIssueWorkerStock(${index})">
                         </div>
@@ -6026,7 +6033,8 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 if (display) display.textContent = '';
                 return;
             }
-            const stock = getStock(row.warehouseId, row.itemId, 'NEW');
+            const condition = row.condition || 'NEW';
+            const stock = getStock(row.warehouseId, row.itemId, condition);
             display.textContent = `المتاح: ${stock} قطعة`;
         }
 
@@ -6080,7 +6088,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     itemId: Number(row.itemId),
                     warehouseId: Number(row.warehouseId),
                     quantity: Number(row.quantity),
-                    condition: 'NEW'
+                    condition: row.condition || 'NEW'
                 }));
                 if (!workerAssignments.length || workerAssignments.some(row => !row.workerId || !row.itemId || !row.warehouseId || !row.quantity || row.quantity <= 0)) {
                     alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار العامل والصنف والمخزن والكمية الصحيحة في كل صف</div>`;
