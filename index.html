@@ -3999,11 +3999,10 @@
                 </div>
                 <div class="form-group">
                     <label>اختر العامل لتسكينه في هذه الشقة *</label>
-                    <select id="assign-worker-id" size="6" onchange="document.getElementById('assign-worker-selected').style.display='none'" style="width:100%; min-height:150px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem;">
+                    <select id="assign-worker-id" size="6" onchange="selectHousingWorkerAutomatically()" style="width:100%; min-height:150px; padding:10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-size:1rem;">
                         <option value="">-- اختر العامل --</option>
                         ${workers.map(w => `<option value="${w.id}">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</option>`).join('')}
                     </select>
-                    <button type="button" class="btn btn-primary" style="margin-top:8px;" onclick="confirmHousingWorkerSelection()">✅ اختيار العامل المحدد</button>
                     <div id="assign-worker-selected" class="alert alert-success" style="display:none; margin-top:8px; margin-bottom:0;"></div>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
@@ -4025,21 +4024,23 @@
                 .join('');
         }
 
-        function confirmHousingWorkerSelection() {
+        function selectHousingWorkerAutomatically() {
             const select = document.getElementById('assign-worker-id');
             const display = document.getElementById('assign-worker-selected');
             const worker = (window._housingAssignWorkers || []).find(w => Number(w.id) === Number(select?.value));
-            if (!worker || !display) return;
+            if (!display) return;
+            if (!worker) {
+                display.textContent = '';
+                display.style.display = 'none';
+                return;
+            }
             display.textContent = `تم اختيار العامل: ${worker.code} - ${worker.name}`;
             display.style.display = 'block';
         }
 
         function saveWorkerHousingAssignment(buildingId, aptNumber) {
             const wId = Number(document.getElementById('assign-worker-id').value);
-            if (!wId) {
-                alert('يرجى البحث عن العامل ثم تحديده والضغط على «اختيار العامل المحدد»');
-                return;
-            }
+            if (!wId) { alert('يرجى البحث عن العامل ثم اختياره من القائمة'); return; }
 
             const workers = DB.get('Workers');
             const idx = workers.findIndex(w => Number(w.id) === wId);
