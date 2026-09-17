@@ -4001,9 +4001,9 @@
                     <label>اختر عاملًا أو أكثر لتسكينهم في هذه الشقة *</label>
                     <div id="assign-worker-list" style="max-height:260px; overflow-y:auto; border:1px solid var(--border); border-radius:8px; background:var(--bg); padding:6px;">
                         ${workers.map(w => `
-                            <label style="display:flex; align-items:center; gap:8px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
-                                <input type="checkbox" class="assign-worker-check" value="${w.id}" onchange="updateHousingWorkerSelection()">
-                                <span>${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
+                            <label style="display:flex; align-items:center; gap:6px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
+                                <input type="checkbox" class="assign-worker-check" value="${w.id}" onchange="updateHousingWorkerSelection()" style="width:15px; height:15px; flex:0 0 15px; margin:0;">
+                                <span style="flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5;">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
                             </label>
                         `).join('')}
                     </div>
@@ -4026,9 +4026,9 @@
             list.innerHTML = workers
                 .filter(w => `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
                 .map(w => `
-                    <label style="display:flex; align-items:center; gap:8px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
-                        <input type="checkbox" class="assign-worker-check" value="${w.id}" ${window._housingSelectedWorkerIds?.has(Number(w.id)) ? 'checked' : ''} onchange="updateHousingWorkerSelection()">
-                        <span>${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
+                    <label style="display:flex; align-items:center; gap:6px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
+                        <input type="checkbox" class="assign-worker-check" value="${w.id}" ${window._housingSelectedWorkerIds?.has(Number(w.id)) ? 'checked' : ''} onchange="updateHousingWorkerSelection()" style="width:15px; height:15px; flex:0 0 15px; margin:0;">
+                        <span style="flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere; line-height:1.5;">${w.code} - ${w.name} ${w.buildingId ? '(مسكن حالياً)' : '(بدون سكن)'}</span>
                     </label>
                 `)
                 .join('');
