@@ -5634,7 +5634,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const txs = DB.get('Transactions');
             const newTx = {
                 id: DB.nextId('Transactions'),
-                date: date || new Date().toISOString().split('T')[0],
+                date: (targetType === 'WORKER' ? new Date().toISOString().split('T')[0] : date) || new Date().toISOString().split('T')[0],
                 type: 'STOCK_IN', warehouseId: whId, workerId: null, itemId: itemId,
                 quantity: qty, condition: cond, operator: op, notes: notes
             };
@@ -5712,7 +5712,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                                 ${housing.map(h => `<option value="${h.id}" ${preTargetId&&Number(preTargetId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                             </select>
                         </div>
-                        <div id="iss-common-item" class="form-group">
+                        <div class="form-group">
                             <label>رقم الشقة (اختياري / أو العمارة عامة)</label>
                             <input type="text" id="m-iss-apt" value="${preApt || ''}" placeholder="مثال: شقة 10">
                         </div>
@@ -5726,12 +5726,12 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     </div>
                 </div>
 
-                <div class="form-group">
+                <div id="iss-common-warehouse" class="form-group">
                     <label>${t('warehouse')} *</label>
                     <select id="m-iss-wh" onchange="refreshModalIssueStock()">${activeWarehouses.map(w => `<option value="${w.id}" ${preWhId&&Number(preWhId)===Number(w.id)?'selected':''}>${w.name}</option>`).join('')}</select>
                 </div>
                 
-                <div class="form-group">
+                <div id="iss-common-item" class="form-group">
                     <label>${t('item')} *</label>
                     <select id="m-iss-item" onchange="refreshModalIssueStock()">
                         ${items.map(i => {
@@ -5749,7 +5749,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <div class="form-group"><label>${t('quantity')} *</label><input type="number" id="m-iss-qty" value="1" min="1"></div>
                 </div>
                 <div id="m-iss-avail-display" style="margin-bottom:12px; font-weight:bold; color:var(--primary);"></div>
-                <div class="form-group"><label>${t('date')} *</label><input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}"></div>
+                <div id="iss-common-date" class="form-group"><label>${t('date')} *</label><input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}"></div>
                 <div class="form-group"><label>${t('notes')}</label><textarea id="m-iss-notes" placeholder="ملاحظات الصرف"></textarea></div>
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
                     <button class="btn" onclick="closeModal()">${t('cancel')}</button>
@@ -5758,8 +5758,10 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             `, true);
             document.getElementById('modal-content')?.classList.add('modal-xl');
             window._issueWorkers = activeWorkers;
+            window._issueWarehouses = activeWarehouses;
             window._issueItems = items;
             window._issuePreselectedWorker = preTargetId && preTargetType === 'WORKER' ? Number(preTargetId) : null;
+            window._issuePreselectedWarehouse = preWhId ? Number(preWhId) : null;
             window._issueWorkerRows = null;
             renderIssueWorkerRows();
             toggleIssueTargetFields();
@@ -5784,7 +5786,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
         function renderIssueWorkerRows() {
             const container = document.getElementById('m-iss-worker-rows');
             if (!container) return;
-            const rows = window._issueWorkerRows || [{ workerId: window._issuePreselectedWorker, itemId: '', quantity: 1, condition: 'NEW' }];
+            const rows = window._issueWorkerRows || [{ workerId: window._issuePreselectedWorker, itemId: '', warehouseId: window._issuePreselectedWarehouse, quantity: 1, condition: 'NEW' }];
             window._issueWorkerRows = rows;
             container.innerHTML = rows.map((row, index) => `
                 <div class="issue-worker-row" data-row-index="${index}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; background:var(--surface);">
@@ -5808,10 +5810,10 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
-                            <label>الحالة *</label>
-                            <select onchange="updateIssueWorkerRow(${index}, 'condition', this.value); refreshIssueWorkerStock(${index})">
-                                <option value="NEW" ${row.condition === 'NEW' ? 'selected' : ''}>جديد (NEW)</option>
-                                <option value="RETURNED_USED" ${row.condition === 'RETURNED_USED' ? 'selected' : ''}>مستعمل صالح (RETURNED_USED)</option>
+                            <label>المخزن المنصرف منه *</label>
+                            <select onchange="updateIssueWorkerRow(${index}, 'warehouseId', this.value)">
+                                <option value="">-- اختر المخزن --</option>
+                                ${(window._issueWarehouses || []).map(w => `<option value="${w.id}" ${Number(row.warehouseId) === Number(w.id) ? 'selected' : ''}>${w.name}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group" style="margin:0;">
@@ -5819,15 +5821,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                             <input type="number" min="1" value="${row.quantity || 1}" onchange="updateIssueWorkerRow(${index}, 'quantity', this.value); refreshIssueWorkerStock(${index})">
                         </div>
                     </div>
-                    <div id="m-iss-worker-stock-${index}" style="font-weight:bold; color:var(--primary); margin-top:8px;"></div>
                 </div>
             `).join('');
-            rows.forEach((_, index) => refreshIssueWorkerStock(index));
         }
 
         function addIssueWorkerRow() {
             const rows = window._issueWorkerRows || [];
-            rows.push({ workerId: '', itemId: '', quantity: 1, condition: 'NEW', search: '' });
+            rows.push({ workerId: '', itemId: '', warehouseId: window._issuePreselectedWarehouse || '', quantity: 1, condition: 'NEW', search: '' });
             window._issueWorkerRows = rows;
             renderIssueWorkerRows();
         }
@@ -5841,7 +5841,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function updateIssueWorkerRow(index, field, value) {
             if (!window._issueWorkerRows?.[index]) return;
-            window._issueWorkerRows[index][field] = field === 'quantity' ? Number(value) : (field === 'workerId' || field === 'itemId' ? Number(value) : value);
+            window._issueWorkerRows[index][field] = field === 'quantity' ? Number(value) : (field === 'workerId' || field === 'itemId' || field === 'warehouseId' ? Number(value) : value);
         }
 
         function filterIssueWorkerRow(index, search) {
@@ -5855,14 +5855,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function refreshIssueWorkerStock(index) {
             const row = window._issueWorkerRows?.[index];
-            const display = document.getElementById(`m-iss-worker-stock-${index}`);
-            const whId = document.getElementById('m-iss-wh')?.value;
-            if (!row || !display || !whId || !row.itemId) {
-                if (display) display.textContent = '';
-                return;
-            }
-            const stock = getStock(whId, row.itemId, row.condition || 'NEW');
-            display.innerHTML = `المتاح في المخزن لهذه الحالة: <strong>${stock}</strong> قطعة`;
+            return row;
         }
 
         function toggleIssueTargetFields() {
@@ -5870,9 +5863,11 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             document.getElementById('iss-container-worker').style.display = targetType === 'WORKER' ? 'block' : 'none';
             document.getElementById('iss-container-supervisor').style.display = targetType === 'SUPERVISOR' ? 'block' : 'none';
             document.getElementById('iss-container-housing').style.display = targetType === 'HOUSING' ? 'block' : 'none';
+            document.getElementById('iss-common-warehouse').style.display = targetType === 'WORKER' ? 'none' : 'block';
             document.getElementById('iss-common-item').style.display = targetType === 'WORKER' ? 'none' : 'block';
             document.getElementById('iss-common-condition-quantity').style.display = targetType === 'WORKER' ? 'none' : 'flex';
             document.getElementById('m-iss-avail-display').style.display = targetType === 'WORKER' ? 'none' : 'block';
+            document.getElementById('iss-common-date').style.display = targetType === 'WORKER' ? 'none' : 'block';
         }
 
         function openIssueModalForHousing(buildingId, aptNumber = null) {
@@ -5895,8 +5890,8 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function submitModalIssue(returnWhId = null) {
             const targetType = document.querySelector('input[name="iss-target-type"]:checked')?.value || 'WORKER';
-            const whId = Number(document.getElementById('m-iss-wh').value);
-            const date = document.getElementById('m-iss-date').value;
+            const whId = Number(document.getElementById('m-iss-wh')?.value);
+            const date = document.getElementById('m-iss-date')?.value;
             const notes = document.getElementById('m-iss-notes').value.trim();
             const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
             const alertBox = document.getElementById('modal-issue-alert');
@@ -5912,11 +5907,12 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 workerAssignments = (window._issueWorkerRows || []).map(row => ({
                     workerId: Number(row.workerId),
                     itemId: Number(row.itemId),
+                    warehouseId: Number(row.warehouseId),
                     quantity: Number(row.quantity),
-                    condition: row.condition || 'NEW'
+                    condition: 'NEW'
                 }));
-                if (!workerAssignments.length || workerAssignments.some(row => !row.workerId || !row.itemId || !row.quantity || row.quantity <= 0)) {
-                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار العامل والصنف والكمية الصحيحة في كل صف</div>`;
+                if (!workerAssignments.length || workerAssignments.some(row => !row.workerId || !row.itemId || !row.warehouseId || !row.quantity || row.quantity <= 0)) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار العامل والصنف والمخزن والكمية الصحيحة في كل صف</div>`;
                     return;
                 }
                 workerIds = workerAssignments.map(row => row.workerId);
@@ -5944,21 +5940,21 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const itemId = targetType === 'WORKER' ? null : Number(document.getElementById('m-iss-item').value);
             const qty = targetType === 'WORKER' ? null : Number(document.getElementById('m-iss-qty').value);
             const cond = targetType === 'WORKER' ? null : document.getElementById('m-iss-cond').value;
-            if (!whId || (targetType !== 'WORKER' && (!itemId || !qty || qty <= 0))) {
+            if (targetType !== 'WORKER' && (!whId || !itemId || !qty || qty <= 0)) {
                 alertBox.innerHTML = `<div class="alert alert-danger">يرجى ملء جميع الحقول وتحديد كمية صحيحة</div>`;
                 return;
             }
 
             const stockRequirements = targetType === 'WORKER'
                 ? workerAssignments.reduce((requirements, row) => {
-                    const key = `${row.itemId}:${row.condition}`;
-                    requirements[key] = requirements[key] || { itemId: row.itemId, condition: row.condition, quantity: 0 };
+                    const key = `${row.warehouseId}:${row.itemId}:${row.condition}`;
+                    requirements[key] = requirements[key] || { warehouseId: row.warehouseId, itemId: row.itemId, condition: row.condition, quantity: 0 };
                     requirements[key].quantity += row.quantity;
                     return requirements;
                 }, {})
                 : { [`${itemId}:${cond}`]: { itemId, condition: cond, quantity: qty } };
             for (const requirement of Object.values(stockRequirements)) {
-                const currentStock = getStock(whId, requirement.itemId, requirement.condition);
+                const currentStock = getStock(targetType === 'WORKER' ? requirement.warehouseId : whId, requirement.itemId, requirement.condition);
                 if (currentStock < requirement.quantity) {
                     alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} للصنف المحدد (المطلوب: ${requirement.quantity}، المتاح: ${currentStock})</div>`;
                     return;
@@ -5968,13 +5964,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const txs = DB.get('Transactions');
             const assignments = targetType === 'WORKER'
                 ? workerAssignments
-                : [{ workerId: null, itemId, quantity: qty, condition: cond }];
+                : [{ workerId: null, warehouseId: whId, itemId, quantity: qty, condition: cond }];
             const newTransactions = assignments.map(assignment => ({
                 id: DB.nextId('Transactions'),
-                date: date || new Date().toISOString().split('T')[0],
+                date: (targetType === 'WORKER' ? new Date().toISOString().split('T')[0] : date) || new Date().toISOString().split('T')[0],
                 type: 'ISSUE',
                 targetType: targetType,
-                warehouseId: whId,
+                warehouseId: assignment.warehouseId,
                 workerId: assignment.workerId,
                 supervisorId: supervisorId,
                 buildingId: buildingId,
