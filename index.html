@@ -392,6 +392,18 @@
         .modal.modal-lg {
             max-width: 850px;
         }
+        .modal.modal-xl {
+            width: min(96vw, 1400px);
+            max-width: 1400px;
+            max-height: 94vh;
+            padding: 30px;
+        }
+        .modal.modal-fullscreen {
+            width: 98vw;
+            max-width: none;
+            height: 96vh;
+            max-height: 96vh;
+        }
         .modal-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
             padding-bottom: 12px; border-bottom: 1px solid var(--border);
@@ -5019,8 +5031,17 @@
         }
         function closeModal() {
             const mContent = document.getElementById('modal-content');
-            if (mContent) mContent.classList.remove('modal-lg');
+            if (mContent) mContent.classList.remove('modal-lg', 'modal-xl', 'modal-fullscreen');
             document.getElementById('modal-overlay').classList.remove('active');
+        }
+
+        function toggleIssueModalSize() {
+            const modal = document.getElementById('modal-content');
+            const button = document.getElementById('issue-modal-size-toggle');
+            if (!modal || !button) return;
+            const isFullscreen = modal.classList.toggle('modal-fullscreen');
+            button.textContent = isFullscreen ? '↙️ الحجم الطبيعي' : '↗️ تكبير النافذة';
+            button.title = isFullscreen ? 'إعادة النافذة إلى الحجم الطبيعي' : 'تكبير نافذة صرف العهد';
         }
 
         // ==========================================
@@ -5637,7 +5658,13 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
 
             openModal(`
-                <div class="modal-header"><h3>📤 صرف عهدة جديدة</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div class="modal-header">
+                    <h3>📤 صرف عهدة جديدة</h3>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button type="button" id="issue-modal-size-toggle" class="btn" onclick="toggleIssueModalSize()" title="تكبير نافذة صرف العهد">↗️ تكبير النافذة</button>
+                        <button class="modal-close" onclick="closeModal()">×</button>
+                    </div>
+                </div>
                 <div id="modal-issue-alert"></div>
                 
                 <div class="form-group" style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border); margin-bottom:15px;">
@@ -5728,7 +5755,8 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <button class="btn" onclick="closeModal()">${t('cancel')}</button>
                     <button class="btn btn-success" onclick="submitModalIssue(${preWhId})">💾 تأكيد الصرف</button>
                 </div>
-            `);
+            `, true);
+            document.getElementById('modal-content')?.classList.add('modal-xl');
             window._issueWorkers = activeWorkers;
             window._issueItems = items;
             window._issuePreselectedWorker = preTargetId && preTargetType === 'WORKER' ? Number(preTargetId) : null;
