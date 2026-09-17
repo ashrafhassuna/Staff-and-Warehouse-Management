@@ -3629,7 +3629,7 @@
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                     <button class="btn" onclick="closeModal()">إغلاق</button>
                     <button class="btn" onclick="closeModal(); openSupervisorEditModal(${supervisorId});">✏️ تعديل بيانات الإداري</button>
-                    ${totalHeld > 0 ? `<button class="btn btn-primary" onclick="closeModal(); openReturnModal();">📥 رد وتسوية العهدة</button>` : ''}
+                    ${totalHeld > 0 ? `<button class="btn btn-primary" onclick="closeModal(); openReturnModal('WORKER', ${workerId});">📥 رد وتسوية العهدة</button>` : ''}
                 </div>
             `);
         }
@@ -6140,10 +6140,11 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                             <input type="hidden" class="m-ret-item-id" value="${itemId}">
                             <input type="hidden" class="m-ret-orig-total" value="${c.total}">
                             <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-                                <div><label style="font-size:0.75rem; color:var(--secondary);">صالح (Used):</label><input type="number" class="m-ret-used" value="${c.total}" min="0" max="${c.total}"></div>
-                                <div><label style="font-size:0.75rem; color:var(--danger);">تالف:</label><input type="number" class="m-ret-dam" value="0" min="0" max="${c.total}"></div>
-                                <div><label style="font-size:0.75rem; color:var(--danger);">مفقود:</label><input type="number" class="m-ret-lost" value="0" min="0" max="${c.total}"></div>
+                            <div><label style="font-size:0.75rem; color:var(--secondary);">صالح (مسترد):</label><input type="number" class="m-ret-used" value="0" min="0" max="${c.total}" oninput="refreshReturnRemaining(this)"></div>
+                                <div><label style="font-size:0.75rem; color:var(--danger);">تالف:</label><input type="number" class="m-ret-dam" value="0" min="0" max="${c.total}" oninput="refreshReturnRemaining(this)"></div>
+                                <div><label style="font-size:0.75rem; color:var(--danger);">مفقود:</label><input type="number" class="m-ret-lost" value="0" min="0" max="${c.total}" oninput="refreshReturnRemaining(this)"></div>
                             </div>
+                            <div class="m-ret-remaining" style="margin-top:8px; color:var(--primary); font-weight:bold;">سيبقى مع العامل: ${c.total}</div>
                         </div>
                     `;
                 }
@@ -6156,6 +6157,18 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 html += `<button class="btn btn-success" style="width:100%; justify-content:center; padding:10px; margin-top:12px;" onclick="submitModalReturn()">💾 حفظ رد العهدة إلى المخزن</button>`;
                 container.innerHTML = html;
             }
+        }
+
+        function refreshReturnRemaining(input) {
+            const card = input?.closest('.card');
+            if (!card) return;
+            const total = Number(card.querySelector('.m-ret-orig-total')?.value) || 0;
+            const used = Number(card.querySelector('.m-ret-used')?.value) || 0;
+            const dam = Number(card.querySelector('.m-ret-dam')?.value) || 0;
+            const lost = Number(card.querySelector('.m-ret-lost')?.value) || 0;
+            const remaining = Math.max(0, total - used - dam - lost);
+            const display = card.querySelector('.m-ret-remaining');
+            if (display) display.textContent = `سيبقى مع العامل: ${remaining}`;
         }
 
         function submitModalReturn() {
@@ -6181,6 +6194,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             }
 
             let error = null;
+            let returnedAny = false;
             cards.forEach(card => {
                 const itemId = Number(card.querySelector('.m-ret-item-id').value);
                 const total = Number(card.querySelector('.m-ret-orig-total').value);
@@ -6188,10 +6202,20 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 const dam = Number(card.querySelector('.m-ret-dam').value) || 0;
                 const lost = Number(card.querySelector('.m-ret-lost').value) || 0;
 
-                if (used + dam + lost !== total) {
-                    error = `توزيع كميات الصنف رقم (${itemId}) غير متطابق مع الإجمالي (${total})`;
+                if (used + dam + lost > total) {
+                    error = `الكمية المستردة للصنف رقم (${itemId}) تتجاوز العهدة الحالية (${total})`;
                 }
+                if (used + dam + lost > 0) returnedAny = true;
             });
+
+            if (!cards.length) {
+                alertBox.innerHTML = `<div class="alert alert-warning">لا توجد عهدة مستحقة للرد.</div>`;
+                return;
+            }
+            if (!returnedAny) {
+                alertBox.innerHTML = `<div class="alert alert-warning">أدخل كمية واحدة على الأقل لاستردادها أو تسويتها.</div>`;
+                return;
+            }
 
             if (error) {
                 alertBox.innerHTML = `<div class="alert alert-danger">${error}</div>`;
@@ -6314,7 +6338,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px;">
                     <button class="btn" onclick="closeModal()">إغلاق</button>
                     <button class="btn" onclick="closeModal(); openWorkerEditModal(${workerId});">✏️ تعديل بيانات العامل</button>
-                    ${totalHeld > 0 ? `<button class="btn btn-primary" onclick="closeModal(); openReturnModal();">📥 رد وتسوية العهدة</button>` : ''}
+                    ${totalHeld > 0 ? `<button class="btn btn-primary" onclick="closeModal(); openReturnModal('WORKER', ${workerId});">📥 رد وتسوية العهدة</button>` : ''}
                 </div>
             `);
         }
