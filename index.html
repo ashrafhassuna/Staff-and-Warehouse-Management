@@ -5651,10 +5651,12 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
                 <!-- 1. Worker Target -->
                 <div id="iss-container-worker" class="form-group" style="${preTargetType==='WORKER'?'':'display:none;'}">
-                    <label>${t('worker')} * <small style="color:var(--text-secondary);">يمكن اختيار أكثر من عامل (نفس الصنف والكمية لكل عامل)</small></label>
-                    <select id="m-iss-worker" multiple size="6" style="min-height:130px;">
-                        ${activeWorkers.map(w => `<option value="${w.id}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name}</option>`).join('')}
-                    </select>
+                    <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px;">
+                        <label style="margin:0; font-weight:bold;">👷 تفاصيل الصرف لكل عامل *</label>
+                        <button type="button" class="btn btn-primary" onclick="addIssueWorkerRow()">➕ إضافة عامل</button>
+                    </div>
+                    <small style="color:var(--text-secondary); display:block; margin-bottom:10px;">ابحث عن العامل، ثم اختر صنف العهدة والكمية الخاصة به. يمكنك إضافة أكثر من عامل بأصناف وكميات مختلفة.</small>
+                    <div id="m-iss-worker-rows"></div>
                 </div>
 
                 <!-- 2. Supervisor Target -->
@@ -5674,7 +5676,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                                 ${housing.map(h => `<option value="${h.id}" ${preTargetId&&Number(preTargetId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                             </select>
                         </div>
-                        <div class="form-group">
+                        <div id="iss-common-item" class="form-group">
                             <label>رقم الشقة (اختياري / أو العمارة عامة)</label>
                             <input type="text" id="m-iss-apt" value="${preApt || ''}" placeholder="مثال: شقة 10">
                         </div>
@@ -5703,7 +5705,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     </select>
                 </div>
                 
-                <div class="form-row">
+                <div id="iss-common-condition-quantity" class="form-row">
                     <div class="form-group">
                         <label>${t('condition')} *</label>
                         <select id="m-iss-cond" onchange="refreshModalIssueStock()"><option value="NEW">جديد (NEW)</option><option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option></select>
@@ -5718,7 +5720,114 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <button class="btn btn-success" onclick="submitModalIssue(${preWhId})">💾 تأكيد الصرف</button>
                 </div>
             `);
+            window._issueWorkers = activeWorkers;
+            window._issueItems = items;
+            window._issuePreselectedWorker = preTargetId && preTargetType === 'WORKER' ? Number(preTargetId) : null;
+            window._issueWorkerRows = null;
+            renderIssueWorkerRows();
+            toggleIssueTargetFields();
             refreshModalIssueStock();
+        }
+
+        function issueItemOptions(selectedId = null) {
+            return (window._issueItems || DB.get('CustodyItems').filter(i => i.status === 'Active')).map(i => {
+                const catLabel = i.category === 'ADMIN' ? '[إداري]' : (i.category === 'HOUSING' ? '[سكن]' : '[موظفين]');
+                return `<option value="${i.id}" ${Number(selectedId) === Number(i.id) ? 'selected' : ''}>${catLabel} ${i.name} (${i.unit || 'قطعة'})</option>`;
+            }).join('');
+        }
+
+        function issueWorkerOptions(search = '', selectedId = null) {
+            const query = String(search || '').trim().toLowerCase();
+            return (window._issueWorkers || DB.get('Workers').filter(w => w.status === 'Active'))
+                .filter(w => !query || `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
+                .map(w => `<option value="${w.id}" ${Number(selectedId) === Number(w.id) ? 'selected' : ''}>${w.code} - ${w.name}</option>`)
+                .join('');
+        }
+
+        function renderIssueWorkerRows() {
+            const container = document.getElementById('m-iss-worker-rows');
+            if (!container) return;
+            const rows = window._issueWorkerRows || [{ workerId: window._issuePreselectedWorker, itemId: '', quantity: 1, condition: 'NEW' }];
+            window._issueWorkerRows = rows;
+            container.innerHTML = rows.map((row, index) => `
+                <div class="issue-worker-row" data-row-index="${index}" style="border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:10px; background:var(--surface);">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                        <strong>صرف رقم ${index + 1}</strong>
+                        ${rows.length > 1 ? `<button type="button" class="btn btn-danger" onclick="removeIssueWorkerRow(${index})">🗑️ حذف</button>` : ''}
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>بحث عن العامل *</label>
+                            <input type="search" placeholder="اكتب الكود أو الاسم أو الرقم القومي" value="${row.search || ''}" oninput="filterIssueWorkerRow(${index}, this.value)">
+                            <select id="m-iss-worker-${index}" onchange="updateIssueWorkerRow(${index}, 'workerId', this.value)" style="margin-top:6px;">
+                                <option value="">-- اختر العامل --</option>
+                                ${issueWorkerOptions(row.search, row.workerId)}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>صنف العهدة *</label>
+                            <select onchange="updateIssueWorkerRow(${index}, 'itemId', this.value); refreshIssueWorkerStock(${index})">
+                                <option value="">-- اختر الصنف --</option>${issueItemOptions(row.itemId)}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الحالة *</label>
+                            <select onchange="updateIssueWorkerRow(${index}, 'condition', this.value); refreshIssueWorkerStock(${index})">
+                                <option value="NEW" ${row.condition === 'NEW' ? 'selected' : ''}>جديد (NEW)</option>
+                                <option value="RETURNED_USED" ${row.condition === 'RETURNED_USED' ? 'selected' : ''}>مستعمل صالح (RETURNED_USED)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>الكمية *</label>
+                            <input type="number" min="1" value="${row.quantity || 1}" onchange="updateIssueWorkerRow(${index}, 'quantity', this.value); refreshIssueWorkerStock(${index})">
+                        </div>
+                    </div>
+                    <div id="m-iss-worker-stock-${index}" style="font-weight:bold; color:var(--primary);"></div>
+                </div>
+            `).join('');
+            rows.forEach((_, index) => refreshIssueWorkerStock(index));
+        }
+
+        function addIssueWorkerRow() {
+            const rows = window._issueWorkerRows || [];
+            rows.push({ workerId: '', itemId: '', quantity: 1, condition: 'NEW', search: '' });
+            window._issueWorkerRows = rows;
+            renderIssueWorkerRows();
+        }
+
+        function removeIssueWorkerRow(index) {
+            const rows = window._issueWorkerRows || [];
+            if (rows.length <= 1) return;
+            rows.splice(index, 1);
+            renderIssueWorkerRows();
+        }
+
+        function updateIssueWorkerRow(index, field, value) {
+            if (!window._issueWorkerRows?.[index]) return;
+            window._issueWorkerRows[index][field] = field === 'quantity' ? Number(value) : (field === 'workerId' || field === 'itemId' ? Number(value) : value);
+        }
+
+        function filterIssueWorkerRow(index, search) {
+            if (!window._issueWorkerRows?.[index]) return;
+            window._issueWorkerRows[index].search = search;
+            const select = document.getElementById(`m-iss-worker-${index}`);
+            if (!select) return;
+            const selectedId = window._issueWorkerRows[index].workerId;
+            select.innerHTML = `<option value="">-- اختر العامل --</option>${issueWorkerOptions(search, selectedId)}`;
+        }
+
+        function refreshIssueWorkerStock(index) {
+            const row = window._issueWorkerRows?.[index];
+            const display = document.getElementById(`m-iss-worker-stock-${index}`);
+            const whId = document.getElementById('m-iss-wh')?.value;
+            if (!row || !display || !whId || !row.itemId) {
+                if (display) display.textContent = '';
+                return;
+            }
+            const stock = getStock(whId, row.itemId, row.condition || 'NEW');
+            display.innerHTML = `المتاح في المخزن لهذه الحالة: <strong>${stock}</strong> قطعة`;
         }
 
         function toggleIssueTargetFields() {
@@ -5726,6 +5835,9 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             document.getElementById('iss-container-worker').style.display = targetType === 'WORKER' ? 'block' : 'none';
             document.getElementById('iss-container-supervisor').style.display = targetType === 'SUPERVISOR' ? 'block' : 'none';
             document.getElementById('iss-container-housing').style.display = targetType === 'HOUSING' ? 'block' : 'none';
+            document.getElementById('iss-common-item').style.display = targetType === 'WORKER' ? 'none' : 'block';
+            document.getElementById('iss-common-condition-quantity').style.display = targetType === 'WORKER' ? 'none' : 'flex';
+            document.getElementById('m-iss-avail-display').style.display = targetType === 'WORKER' ? 'none' : 'block';
         }
 
         function openIssueModalForHousing(buildingId, aptNumber = null) {
@@ -5743,14 +5855,12 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
             const stock = getStock(whSelect.value, itemSelect.value, condSelect.value);
             display.innerHTML = `المتاح للصرف من هذا الصنف بحالة (${condSelect.value}): <strong>${stock}</strong> قطعة`;
+            (window._issueWorkerRows || []).forEach((_, index) => refreshIssueWorkerStock(index));
         }
 
         function submitModalIssue(returnWhId = null) {
             const targetType = document.querySelector('input[name="iss-target-type"]:checked')?.value || 'WORKER';
             const whId = Number(document.getElementById('m-iss-wh').value);
-            const itemId = Number(document.getElementById('m-iss-item').value);
-            const qty = Number(document.getElementById('m-iss-qty').value);
-            const cond = document.getElementById('m-iss-cond').value;
             const date = document.getElementById('m-iss-date').value;
             const notes = document.getElementById('m-iss-notes').value.trim();
             const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
@@ -5758,16 +5868,25 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
             let workerId = null;
             let workerIds = [];
+            let workerAssignments = [];
             let supervisorId = null;
             let buildingId = null;
             let apt = null;
 
             if (targetType === 'WORKER') {
-                workerIds = Array.from(document.getElementById('m-iss-worker')?.selectedOptions || [])
-                    .map(option => Number(option.value))
-                    .filter(Boolean);
-                if (!workerIds.length) {
-                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار عامل واحد على الأقل لصرف العهدة له</div>`;
+                workerAssignments = (window._issueWorkerRows || []).map(row => ({
+                    workerId: Number(row.workerId),
+                    itemId: Number(row.itemId),
+                    quantity: Number(row.quantity),
+                    condition: row.condition || 'NEW'
+                }));
+                if (!workerAssignments.length || workerAssignments.some(row => !row.workerId || !row.itemId || !row.quantity || row.quantity <= 0)) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار العامل والصنف والكمية الصحيحة في كل صف</div>`;
+                    return;
+                }
+                workerIds = workerAssignments.map(row => row.workerId);
+                if (new Set(workerIds).size !== workerIds.length) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">لا يمكن تكرار نفس العامل في أكثر من صف. اجمع صرفه في صف واحد.</div>`;
                     return;
                 }
                 workerId = workerIds[0];
@@ -5787,40 +5906,54 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 }
             }
 
-            if (!whId || !itemId || !qty || qty <= 0) {
+            const itemId = targetType === 'WORKER' ? null : Number(document.getElementById('m-iss-item').value);
+            const qty = targetType === 'WORKER' ? null : Number(document.getElementById('m-iss-qty').value);
+            const cond = targetType === 'WORKER' ? null : document.getElementById('m-iss-cond').value;
+            if (!whId || (targetType !== 'WORKER' && (!itemId || !qty || qty <= 0))) {
                 alertBox.innerHTML = `<div class="alert alert-danger">يرجى ملء جميع الحقول وتحديد كمية صحيحة</div>`;
                 return;
             }
 
-            const issueCount = targetType === 'WORKER' ? workerIds.length : 1;
-            const totalQty = qty * issueCount;
-            const currentStock = getStock(whId, itemId, cond);
-            if (currentStock < totalQty) {
-                alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} (المطلوب إجمالاً: ${totalQty}، المتاح حالياً: ${currentStock})</div>`;
-                return;
+            const stockRequirements = targetType === 'WORKER'
+                ? workerAssignments.reduce((requirements, row) => {
+                    const key = `${row.itemId}:${row.condition}`;
+                    requirements[key] = requirements[key] || { itemId: row.itemId, condition: row.condition, quantity: 0 };
+                    requirements[key].quantity += row.quantity;
+                    return requirements;
+                }, {})
+                : { [`${itemId}:${cond}`]: { itemId, condition: cond, quantity: qty } };
+            for (const requirement of Object.values(stockRequirements)) {
+                const currentStock = getStock(whId, requirement.itemId, requirement.condition);
+                if (currentStock < requirement.quantity) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} للصنف المحدد (المطلوب: ${requirement.quantity}، المتاح: ${currentStock})</div>`;
+                    return;
+                }
             }
 
             const txs = DB.get('Transactions');
-            const newTransactions = (targetType === 'WORKER' ? workerIds : [null]).map((selectedWorkerId, index) => ({
-                id: DB.nextId('Transactions') + index,
+            const assignments = targetType === 'WORKER'
+                ? workerAssignments
+                : [{ workerId: null, itemId, quantity: qty, condition: cond }];
+            const newTransactions = assignments.map(assignment => ({
+                id: DB.nextId('Transactions'),
                 date: date || new Date().toISOString().split('T')[0],
                 type: 'ISSUE',
                 targetType: targetType,
                 warehouseId: whId,
-                workerId: selectedWorkerId,
+                workerId: assignment.workerId,
                 supervisorId: supervisorId,
                 buildingId: buildingId,
                 apartment: apt,
-                itemId: itemId,
-                quantity: qty,
-                condition: cond,
+                itemId: assignment.itemId,
+                quantity: assignment.quantity,
+                condition: assignment.condition,
                 operator: op,
                 notes: notes
             }));
             txs.push(...newTransactions); DB.set('Transactions', txs);
 
             newTransactions.forEach(newTx => {
-                let auditDesc = `صرف ${qty} قطعة`;
+                let auditDesc = `صرف ${newTx.quantity} قطعة`;
                 if (targetType === 'WORKER') auditDesc += ` للعامل #${newTx.workerId}`;
                 if (targetType === 'SUPERVISOR') auditDesc += ` عهدة إدارية للمشرف #${supervisorId}`;
                 if (targetType === 'HOUSING') auditDesc += ` لسكن عمارة #${buildingId} ${apt ? `شقة ${apt}` : ''}`;
@@ -5829,7 +5962,7 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
             closeModal();
             alert(targetType === 'WORKER' && workerIds.length > 1
-                ? `تم صرف ${qty} قطعة لكل عامل لعدد ${workerIds.length} عمال بنجاح!`
+                ? `تم صرف العهدة لعدد ${workerIds.length} عمال بنجاح!`
                 : 'تم صرف العهدة بنجاح!');
             if (targetType === 'SUPERVISOR') navigate('supervisors');
             else if (targetType === 'HOUSING') navigate('housing', { selectedBuildingId: buildingId });
