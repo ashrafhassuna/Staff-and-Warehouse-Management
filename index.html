@@ -1759,6 +1759,12 @@
                         <span class="card-hint">🔗 تصفية النشطين</span>
                     </div>
 
+                    <div class="card" onclick="navigate('workers', { workerFilter: 'Waiting' })" title="انقر لعرض قائمة الانتظار (المرشحين)">
+                        <div class="card-value" style="color:var(--primary);">${workers.filter(w=>w.status==='Waiting').length}</div>
+                        <div class="card-label">المرشحون / قائمة الانتظار</div>
+                        <span class="card-hint">🔗 عرض قائمة الانتظار</span>
+                    </div>
+
                     <div class="card" onclick="navigate('workers', { workerFilter: 'Left' })" title="انقر لعرض العمال المستقيلين والمغادرين">
                         <div class="card-value" style="color:var(--danger);">${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length}</div>
                         <div class="card-label">العمال المستقيلون والمغادرون</div>
@@ -2435,6 +2441,7 @@
 
             let filtered = workers;
             if (initialFilter === 'Active') filtered = workers.filter(w => w.status === 'Active');
+            if (initialFilter === 'Waiting') filtered = workers.filter(w => w.status === 'Waiting');
             if (initialFilter === 'Left') filtered = workers.filter(w => w.status === 'Left' || w.status === 'Terminated');
             if (initialFilter === 'unsettled') filtered = workers.filter(w => getWorkerTotalUnsettled(w.id) > 0);
             if (initialFilter === 'left_unsettled') filtered = workers.filter(w => (w.status === 'Left' || w.status === 'Terminated') && getWorkerTotalUnsettled(w.id) > 0);
@@ -2443,7 +2450,13 @@
                 const fac = factories.find(f => Number(f.id) === Number(w.factoryId));
                 const unsettled = getWorkerTotalUnsettled(w.id);
                 const custodySummary = getWorkerCustodySummaryString(w.id);
-                const facName = fac ? fac.name : '-';
+                let facName = '-';
+                if (w.status === 'Waiting') {
+                    const interviewFac = factories.find(f => Number(f.id) === Number(w.interviewFactoryId));
+                    facName = interviewFac ? `${interviewFac.name} (مقابلة)` : (w.interviewFactoryId ? `مصنع #${w.interviewFactoryId}` : '-');
+                } else {
+                    facName = fac ? fac.name : '-';
+                }
                 const statusBadge = w.status === 'Active' ? 'badge-success' : 'badge-danger';
                 const statusLabel = w.status === 'Active' ? 'ما زال يعمل' : 'مستقيل / مغادر';
                 
@@ -2494,6 +2507,7 @@
                         <select id="worker-status-filter" onchange="applyWorkerFilter(this.value)" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-weight:bold;">
                             <option value="all" ${initialFilter==='all'?'selected':''}>${t('filter_all')} (${workers.length})</option>
                             <option value="Active" ${initialFilter==='Active'?'selected':''}>${t('filter_active')} (${workers.filter(w=>w.status==='Active').length})</option>
+                            <option value="Waiting" ${initialFilter==='Waiting'?'selected':''}>قائمة الانتظار / المرشحون (${workers.filter(w=>w.status==='Waiting').length})</option>
                             <option value="Left" ${initialFilter==='Left'?'selected':''}>${t('filter_left')} (${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length})</option>
                             <option value="unsettled" ${initialFilter==='unsettled'?'selected':''}>${t('filter_unsettled')} (${workers.filter(w=>getWorkerTotalUnsettled(w.id)>0).length})</option>
                             <option value="left_unsettled" ${initialFilter==='left_unsettled'?'selected':''}>${t('filter_left_unsettled')} (${workers.filter(w=>(w.status==='Left'||w.status==='Terminated')&&getWorkerTotalUnsettled(w.id)>0).length})</option>
@@ -5209,7 +5223,34 @@
                     <div class="form-group"><label>الرقم القومي</label><input type="text" id="w-natid"></div>
                 </div>
                 <div class="form-row">
-                    <div class="form-group"><label>المسمى الوظيفي *</label><input type="text" id="w-jobtitle" placeholder="مثال: عامل إنتاج، ميكانيكي، حارس أمن..."></div>
+                    <div class="form-group"><label>المسمى الوظيفي</label><input type="text" id="w-jobtitle" placeholder="مثال: عامل إنتاج، ميكانيكي، حارس أمن..."></div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+                        <label style="margin:0;"><input type="checkbox" id="w-waiting" onchange="document.getElementById('w-waiting-fields').style.display = this.checked ? 'block' : 'none'"> أضف إلى قائمة الانتظار (مرشح - Interview candidate)</label>
+                    </div>
+                </div>
+
+                <div id="w-waiting-fields" style="display:none;">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>تاريخ الوصول / Arrival Date</label>
+                            <input type="date" id="w-arrival" value="${new Date().toISOString().split('T')[0]}">
+                        </div>
+                        <div class="form-group">
+                            <label>مصنع المقابلة</label>
+                            <select id="w-interview-fac">
+                                <option value="">-- اختر المصنع --</option>
+                                ${factories.map(f => `<option value="${f.id}">${f.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>تاريخ المقابلة</label>
+                            <input type="date" id="w-interview-date" value="">
+                        </div>
+                    </div>
+                    <div class="form-group"><label>ملاحظات مقابلة / Interview notes</label><textarea id="w-interview-notes" rows="2"></textarea></div>
                 </div>
 
                 <div class="form-row">
@@ -5265,13 +5306,35 @@
                     </div>
                     <div class="form-group">
                         <label>الحالة الوظيفية *</label>
-                        <select id="w-status">
+                        <select id="w-status" onchange="document.getElementById('w-edit-waiting-fields').style.display = this.value==='Waiting' ? 'block' : 'none'">
                             <option value="Active" ${worker.status==='Active'?'selected':''}>Active (نشط - على رأس العمل)</option>
+                            <option value="Waiting" ${worker.status==='Waiting'?'selected':''}>Waiting (قائمة انتظار - مرشح)</option>
                             <option value="Left" ${worker.status==='Left'?'selected':''}>Left (مستقيل ومغادر)</option>
                             <option value="Terminated" ${worker.status==='Terminated'?'selected':''}>Terminated (منهي خدمته)</option>
                         </select>
                     </div>
                 </div>
+                <div id="w-edit-waiting-fields" style="margin-top:10px; ${worker.status==='Waiting' ? '' : 'display:none;'}">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>تاريخ الوصول / Arrival Date</label>
+                            <input type="date" id="w-arrival" value="${normalizeImportedDate(worker.arrivalDate) || ''}">
+                        </div>
+                        <div class="form-group">
+                            <label>مصنع المقابلة</label>
+                            <select id="w-interview-fac">
+                                <option value="">-- بدون --</option>
+                                ${factories.map(f => `<option value="${f.id}" ${String(f.id)===String(worker.interviewFactoryId)?'selected':''}>${f.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>تاريخ المقابلة</label>
+                            <input type="date" id="w-interview-date" value="${normalizeImportedDate(worker.interviewDate) || ''}">
+                        </div>
+                    </div>
+                    <div class="form-group"><label>ملاحظات مقابلة</label><textarea id="w-interview-notes" rows="2">${worker.interviewNotes || ''}</textarea></div>
+                </div>
+
                 <div class="form-row">
                     <div class="form-group">
                         <label>🏠 عمارة السكن</label>
@@ -5323,9 +5386,14 @@
             const buildingId = document.getElementById('w-building') ? document.getElementById('w-building').value : '';
             const apartment = document.getElementById('w-apartment') ? normalizeApartmentValue(document.getElementById('w-apartment').value) : '';
             const notes = document.getElementById('w-notes').value.trim();
-const jobTitle = document.getElementById('w-jobtitle').value.trim();
+const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById('w-jobtitle').value.trim() : '';
+            const isWaiting = document.getElementById('w-waiting') ? document.getElementById('w-waiting').checked : false;
+            const arrivalDate = document.getElementById('w-arrival') ? document.getElementById('w-arrival').value : '';
+            const interviewFactoryId = document.getElementById('w-interview-fac') ? (document.getElementById('w-interview-fac').value || null) : null;
+            const interviewDate = document.getElementById('w-interview-date') ? document.getElementById('w-interview-date').value : '';
+            const interviewNotes = document.getElementById('w-interview-notes') ? document.getElementById('w-interview-notes').value.trim() : '';
 
-            if (!code || !name || !phone || !jobTitle) { alert('يرجى كتابة كود العامل واسمه ورقم هاتفه والمسمى الوظيفي'); return; }
+            if (!code || !name || !phone || (!jobTitle && !isWaiting)) { alert('يرجى كتابة كود العامل واسمه ورقم هاتفه، أو ضع العامل في قائمة الانتظار بدون مسمى وظيفي'); return; }
 
             const workers = DB.get('Workers');
             const duplicate = workers.find(w => w.code.toLowerCase() === code.toLowerCase() && Number(w.id) !== Number(workerId));
@@ -5336,12 +5404,17 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     id: DB.nextId('Workers'),
                     code: code, name: name, mobile: phone, nationalId: natId,
                     factoryId: facId, buildingId: buildingId, apartment: apartment,
-                    startDate: normalizeImportedDate(document.getElementById('w-start').value),
+                startDate: isWaiting ? '' : normalizeImportedDate(document.getElementById('w-start').value),
                     jobTitle: jobTitle,
-                    status: 'Active', notes: notes
-                };
-                workers.push(newW); DB.set('Workers', workers);
-                logAudit('Workers', 'ADD_WORKER', newW.id, null, newW, 'إضافة عامل جديد');
+                status: isWaiting ? 'Waiting' : 'Active',
+                arrivalDate: arrivalDate || '',
+                interviewFactoryId: interviewFactoryId,
+                interviewDate: interviewDate || '',
+                interviewNotes: interviewNotes || '',
+                notes: notes
+            };
+            workers.push(newW); DB.set('Workers', workers);
+            logAudit('Workers', 'ADD_WORKER', newW.id, null, newW, isWaiting ? 'إضافة عامل إلى قائمة الانتظار' : 'إضافة عامل جديد');
             } else {
                 const idx = workers.findIndex(w => Number(w.id) === Number(workerId));
                 if (idx === -1) return;
@@ -5354,6 +5427,12 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 workers[idx].buildingId = buildingId;
                 workers[idx].apartment = apartment;
                 workers[idx].status = document.getElementById('w-status').value;
+                // waiting/interview fields
+                workers[idx].arrivalDate = document.getElementById('w-arrival') ? document.getElementById('w-arrival').value : (workers[idx].arrivalDate || '');
+                workers[idx].interviewFactoryId = document.getElementById('w-interview-fac') ? (document.getElementById('w-interview-fac').value || null) : (workers[idx].interviewFactoryId || null);
+                workers[idx].interviewDate = document.getElementById('w-interview-date') ? document.getElementById('w-interview-date').value : (workers[idx].interviewDate || '');
+                workers[idx].interviewNotes = document.getElementById('w-interview-notes') ? document.getElementById('w-interview-notes').value.trim() : (workers[idx].interviewNotes || '');
+
                 workers[idx].startDate = normalizeImportedDate(document.getElementById('w-start').value);
                 workers[idx].exitDate = document.getElementById('w-exit-date') ? document.getElementById('w-exit-date').value : '';
                 workers[idx].notes = notes;
