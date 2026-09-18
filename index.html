@@ -6687,17 +6687,11 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
                 });
             } else if (sel === 'rep_left_unsettled') {
                 title = 'تقرير العمال المستقيلين بعهد معلقة لم تسلم';
-                headers = ['كود العامل', 'اسم العامل', 'رقم الهاتف', 'المصنع', 'السكن', 'تاريخ ترك العمل', 'إجمالي القطع المعلقة', 'تفاصيل العهد التي لديه', 'ملاحظات الخروج'];
+                headers = ['اسم العامل', 'المصنع التابع له', 'العهد التي لم تسلم', 'تاريخ انتهاء التعيين / الاستقالة'];
                 workers.filter(w => (w.status === 'Left' || w.status === 'Terminated') && getWorkerTotalUnsettled(w.id) > 0).forEach(w => {
                     const fac = factories.find(f => Number(f.id) === Number(w.factoryId))?.name || '-';
-                    const held = getWorkerTotalUnsettled(w.id);
                     const details = getWorkerCustodySummaryString(w.id);
-                    let hText = '-';
-                    if (w.buildingId) {
-                        const b = housing.find(h => Number(h.id) === Number(w.buildingId));
-                        hText = b ? `عمارة ${b.number || b.name} (${w.apartment ? `شقة ${w.apartment}` : ''})` : '-';
-                    }
-                    rows.push([w.code, w.name, w.mobile, fac, hText, w.exitDate || '-', `<strong style="color:var(--danger);">${held} قطعة</strong>`, details, w.exitNotes || w.notes || '-']);
+                    rows.push([w.name, fac, details, w.exitDate || '-']);
                 });
             } else if (sel === 'rep_employee_custody') {
                 title = 'تقرير عهد الموظفين والعمال';
