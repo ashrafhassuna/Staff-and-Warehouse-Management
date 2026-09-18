@@ -1628,6 +1628,28 @@
         // 6. NAVIGATION & ROUTING
         // ==========================================
         let currentFilterState = {};
+        const LAST_VIEW_KEY = 'Sistym_LastView_';
+
+        function getLastView() {
+            const username = DB.getCurrentUsername();
+            if (!username) return null;
+            try {
+                const saved = JSON.parse(localStorage.getItem(LAST_VIEW_KEY + username) || 'null');
+                return saved && saved.viewName ? saved : null;
+            } catch (e) {
+                console.warn('تعذر قراءة آخر صفحة محفوظة:', e);
+                return null;
+            }
+        }
+
+        function saveLastView(viewName, params) {
+            const username = DB.getCurrentUsername();
+            if (!username) return;
+            localStorage.setItem(LAST_VIEW_KEY + username, JSON.stringify({
+                viewName,
+                params: params || {}
+            }));
+        }
 
         const views = {
             dashboard: renderDashboard,
@@ -1673,6 +1695,7 @@
 
         function navigate(viewName, params = {}) {
             currentFilterState = params;
+            saveLastView(viewName, params);
             toggleMobileSidebar(false);
             updateSidebarLabels();
             document.querySelectorAll('.nav-menu .nav-item').forEach(el => el.classList.remove('active'));
@@ -6975,7 +6998,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
             logAudit('Settings', 'UPDATE_SETTINGS', 1, old, newS, 'تحديث إعدادات الشركة');
             applyCompanyBranding();
             alert('تم حفظ إعدادات وشعار الشركة بنجاح!');
-            navigate('dashboard');
+            navigate('settings');
         }
 
         function handleLogoUpload(input) {
@@ -7075,7 +7098,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
             document.getElementById('lang-toggle').textContent = currentLang === 'ar' ? 'EN' : 'ع';
             updateSidebarLabels();
             const activeNav = document.querySelector('.nav-menu .nav-item.active');
-            if (activeNav) navigate(activeNav.dataset.view);
+            if (activeNav) navigate(activeNav.dataset.view, currentFilterState);
         });
 
         // Start
@@ -7094,7 +7117,8 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
                     checkAuth();
                     applyCompanyBranding();
                     applyDisplaySettings();
-                    navigate('dashboard');
+                    const lastView = getLastView();
+                    navigate(lastView?.viewName || 'dashboard', lastView?.params || {});
                 });
             } else {
                 DB.setCurrentUsername(null);
