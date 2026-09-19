@@ -144,8 +144,21 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            transition: margin 0.3s ease;
         }
         [dir="ltr"] .main-content { margin-right: 0; margin-left: 250px; }
+        .sidebar, .sidebar-header, .nav-item { transition: width 0.3s ease, padding 0.3s ease, background-color 0.25s ease, color 0.25s ease; }
+        body.sidebar-collapsed .sidebar { width: 78px; }
+        body.sidebar-collapsed .main-content { margin-right: 78px; }
+        [dir="ltr"] body.sidebar-collapsed .main-content { margin-right: 0; margin-left: 78px; }
+        body.sidebar-collapsed .sidebar-header h2,
+        body.sidebar-collapsed .sidebar-header .company-sub,
+        body.sidebar-collapsed .nav-item > span:last-child,
+        body.sidebar-collapsed .sidebar > div:last-child { display: none; }
+        body.sidebar-collapsed .sidebar-header { padding: 0 8px 20px; }
+        body.sidebar-collapsed .nav-item { justify-content: center; padding: 13px 8px; }
+        body.sidebar-collapsed .nav-icon { width: auto; }
+        .sidebar-toggle { flex: 0 0 auto; }
 
         .top-bar {
             display: flex;
@@ -190,6 +203,36 @@
             border-color: var(--primary);
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
+        .search-command-wrap { position: relative; }
+        .command-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: min(330px, 80vw);
+            display: none;
+            z-index: 120;
+            padding: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+        }
+        .command-dropdown.active { display: block; }
+        .command-item {
+            width: 100%;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            font: inherit;
+            text-align: right;
+            cursor: pointer;
+        }
+        .command-item:hover { background: rgba(37, 99, 235, 0.09); color: var(--primary); }
         .operator-box {
             display: flex;
             align-items: center;
@@ -584,6 +627,7 @@
 
         @media (max-width: 768px) {
             .mobile-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
+            .sidebar-toggle { display: none; }
             .sidebar {
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
@@ -900,11 +944,15 @@
     <main class="main-content">
         <div class="top-bar">
             <div class="top-bar-left">
+                <button class="btn sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="طي أو توسيع القائمة الجانبية" aria-label="طي أو توسيع القائمة الجانبية">☰</button>
                 <button class="mobile-menu-btn" id="mobile-hamburger-btn" onclick="toggleMobileSidebar(true)" title="القائمة">☰</button>
                 <h1 id="page-title">لوحة التحكم</h1>
             </div>
             <div class="top-bar-actions">
-                <input id="dashboard-quick-search" class="quick-search" type="search" placeholder="🔎 بحث سريع في لوحة التحكم" aria-label="بحث سريع">
+                <div class="search-command-wrap">
+                    <input id="dashboard-quick-search" class="quick-search" type="search" placeholder="🔎 بحث سريع أو اكتب أمراً..." aria-label="بحث سريع أو أمر">
+                    <div id="command-dropdown" class="command-dropdown" role="menu"></div>
+                </div>
                 <div class="operator-box" title="المستخدم النشط حالياً">
                     <label>👤 المستخدم:</label>
                     <span id="current-user-display">Acc. Ashraf Hassuna</span>
@@ -1767,6 +1815,18 @@
             }
         }
 
+        function toggleSidebarCollapse() {
+            if (window.innerWidth <= 768) return;
+            const collapsed = document.body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('Sistym_SidebarCollapsed', collapsed ? '1' : '0');
+        }
+
+        function restoreSidebarCollapse() {
+            if (window.innerWidth > 768 && localStorage.getItem('Sistym_SidebarCollapsed') === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        }
+
         function animateDashboardCounters() {
             if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
             document.querySelectorAll('.dashboard-cards .card-value').forEach(element => {
@@ -1839,9 +1899,73 @@
             });
         }
 
-        function bindDashboardEnhancements(chartData) {
+        const quickCommands = [
+            { icon: '➕', label: 'إضافة عامل', keywords: 'عامل موظف workers add', action: () => openWorkerAddModal() },
+            { icon: '🏭', label: 'إضافة مصنع', keywords: 'مصنع factories add', action: () => openFactoryAddModal() },
+            { icon: '📤', label: 'صرف عهدة', keywords: 'صرف عهدة issue custody', action: () => openIssueModal() },
+            { icon: '📥', label: 'رد عهدة', keywords: 'رد عهدة return custody', action: () => openReturnModal() },
+            { icon: '👷', label: 'تصفية العمال', keywords: 'العمال عامل filter workers', action: () => navigate('workers') },
+            { icon: '📊', label: 'فتح لوحة التحكم', keywords: 'لوحة تحكم dashboard home', action: () => navigate('dashboard') }
+        ];
+
+        function filterCurrentView(value) {
+            const query = String(value || '').trim().toLocaleLowerCase();
+            if (document.querySelector('.dashboard-cards')) filterDashboardCards(query);
+            document.querySelectorAll('#view-container tbody tr, #view-container .grid-card').forEach(element => {
+                element.style.display = !query || element.textContent.toLocaleLowerCase().includes(query) ? '' : 'none';
+            });
+        }
+
+        function renderCommandResults(query) {
+            const dropdown = document.getElementById('command-dropdown');
+            if (!dropdown) return;
+            const normalized = String(query || '').trim().toLocaleLowerCase();
+            const matches = normalized
+                ? quickCommands.filter(command => `${command.label} ${command.keywords}`.toLocaleLowerCase().includes(normalized))
+                : [];
+            dropdown.innerHTML = matches.map((command, index) =>
+                `<button type="button" class="command-item" role="menuitem" data-command-index="${index}">${command.icon} ${command.label}</button>`
+            ).join('');
+            dropdown.classList.toggle('active', matches.length > 0);
+            dropdown.querySelectorAll('[data-command-index]').forEach((button, index) => {
+                button.onclick = () => {
+                    dropdown.classList.remove('active');
+                    const search = document.getElementById('dashboard-quick-search');
+                    if (search) search.value = '';
+                    filterCurrentView('');
+                    matches[index].action();
+                };
+            });
+        }
+
+        function bindSmartSearch() {
             const search = document.getElementById('dashboard-quick-search');
-            if (search) search.oninput = event => filterDashboardCards(event.target.value);
+            if (!search || search.dataset.bound === 'true') return;
+            search.dataset.bound = 'true';
+            search.oninput = event => {
+                filterCurrentView(event.target.value);
+                renderCommandResults(event.target.value);
+            };
+            search.onkeydown = event => {
+                if (event.key === 'Escape') {
+                    search.value = '';
+                    filterCurrentView('');
+                    const dropdown = document.getElementById('command-dropdown');
+                    if (dropdown) dropdown.classList.remove('active');
+                }
+            };
+            if (document.body.dataset.searchDismissBound !== 'true') {
+                document.body.dataset.searchDismissBound = 'true';
+                document.addEventListener('click', event => {
+                    if (!event.target.closest('.search-command-wrap')) {
+                        const dropdown = document.getElementById('command-dropdown');
+                        if (dropdown) dropdown.classList.remove('active');
+                    }
+                });
+            }
+        }
+
+        function bindDashboardEnhancements(chartData) {
             renderDashboardCharts(chartData);
         }
 
@@ -1859,6 +1983,7 @@
             if (views[viewName]) {
                 container.innerHTML = views[viewName]();
                 bindViewEvents(viewName);
+                bindSmartSearch();
                 if (viewName === 'dashboard') {
                     animateDashboardCounters();
                     bindDashboardEnhancements(window.dashboardChartData || { workerStatuses: [0, 0, 0], stockStatuses: [0, 0, 0, 0] });
@@ -7288,6 +7413,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
         const savedTheme = localStorage.getItem('sistym_theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
         document.getElementById('theme-toggle').textContent = savedTheme === 'light' ? '🌙' : '☀️';
+        restoreSidebarCollapse();
         updateSidebarLabels();
 
         // Firebase Auth state listener
