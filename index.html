@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl" data-theme="light">
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام إدارة العهد والعاملين | Worker Custody Management System</title>
@@ -33,6 +34,9 @@
             --border: #334155;
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
         }
+
+        [data-theme="dark"] .card-alert-danger { background: rgba(239, 68, 68, 0.14); }
+        [data-theme="dark"] .card-alert-warning { background: rgba(245, 158, 11, 0.14); }
 
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
@@ -169,6 +173,22 @@
             display: flex;
             align-items: center;
             gap: 10px;
+        }
+        .quick-search {
+            width: min(250px, 24vw);
+            min-width: 170px;
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--bg);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .quick-search:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
         }
         .operator-box {
             display: flex;
@@ -322,6 +342,37 @@
             margin-top: 8px;
             opacity: 0.85;
             display: inline-block;
+        }
+        .card-alert-danger { background: rgba(239, 68, 68, 0.07); }
+        .card-alert-warning { background: rgba(245, 158, 11, 0.09); }
+        .dashboard-analytics {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+        .chart-card {
+            min-height: 300px;
+            padding: 18px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+        .chart-card h3 { color: var(--text); font-size: 1rem; margin-bottom: 12px; }
+        .chart-wrap { position: relative; height: 245px; }
+        .skeleton {
+            position: relative;
+            overflow: hidden;
+            color: transparent !important;
+            background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,0.65) 50%, var(--border) 75%) !important;
+            background-size: 200% 100% !important;
+            animation: skeleton-shimmer 1.2s infinite linear;
+        }
+        .skeleton * { visibility: hidden; }
+        @keyframes skeleton-shimmer { to { background-position: -200% 0; } }
+        @media (max-width: 900px) {
+            .dashboard-analytics { grid-template-columns: 1fr; }
+            .quick-search { width: 100%; min-width: 0; }
         }
         @media (prefers-reduced-motion: reduce) {
             .card, .nav-item { animation: none; transition: none; }
@@ -853,6 +904,7 @@
                 <h1 id="page-title">لوحة التحكم</h1>
             </div>
             <div class="top-bar-actions">
+                <input id="dashboard-quick-search" class="quick-search" type="search" placeholder="🔎 بحث سريع في لوحة التحكم" aria-label="بحث سريع">
                 <div class="operator-box" title="المستخدم النشط حالياً">
                     <label>👤 المستخدم:</label>
                     <span id="current-user-display">Acc. Ashraf Hassuna</span>
@@ -1739,6 +1791,60 @@
             });
         }
 
+        let dashboardCharts = [];
+
+        function renderDashboardCharts(chartData) {
+            if (typeof Chart === 'undefined') {
+                console.warn('Chart.js لم يتم تحميلها؛ سيتم عرض البطاقات بدون الرسوم البيانية.');
+                return;
+            }
+
+            dashboardCharts.forEach(chart => chart.destroy());
+            dashboardCharts = [];
+            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#0f172a';
+            const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e2e8f0';
+            const pieCanvas = document.getElementById('worker-status-chart');
+            const stockCanvas = document.getElementById('stock-status-chart');
+            if (!pieCanvas || !stockCanvas) return;
+
+            dashboardCharts.push(new Chart(pieCanvas, {
+                type: 'pie',
+                data: {
+                    labels: ['نشطون', 'قيد الانتظار', 'غير مقبولين'],
+                    datasets: [{ data: chartData.workerStatuses, backgroundColor: ['#10b981', '#2563eb', '#ef4444'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, font: { family: 'Cairo' } } } } }
+            }));
+
+            dashboardCharts.push(new Chart(stockCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ['جديد', 'مرتجع صالح', 'تالف', 'مفقود'],
+                    datasets: [{ label: 'الكمية', data: chartData.stockStatuses, backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#ef4444'], borderRadius: 7, borderSkipped: false }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            }));
+            document.querySelectorAll('.dashboard-analytics .skeleton').forEach(element => element.classList.remove('skeleton'));
+        }
+
+        function filterDashboardCards(value) {
+            const query = String(value || '').trim().toLocaleLowerCase();
+            document.querySelectorAll('.dashboard-cards .card').forEach(card => {
+                const matches = !query || card.textContent.toLocaleLowerCase().includes(query);
+                card.style.display = matches ? '' : 'none';
+            });
+        }
+
+        function bindDashboardEnhancements(chartData) {
+            const search = document.getElementById('dashboard-quick-search');
+            if (search) search.oninput = event => filterDashboardCards(event.target.value);
+            renderDashboardCharts(chartData);
+        }
+
         function navigate(viewName, params = {}) {
             currentFilterState = params;
             saveLastView(viewName, params);
@@ -1753,7 +1859,10 @@
             if (views[viewName]) {
                 container.innerHTML = views[viewName]();
                 bindViewEvents(viewName);
-                if (viewName === 'dashboard') animateDashboardCounters();
+                if (viewName === 'dashboard') {
+                    animateDashboardCounters();
+                    bindDashboardEnhancements(window.dashboardChartData || { workerStatuses: [0, 0, 0], stockStatuses: [0, 0, 0, 0] });
+                }
             }
         }
 
@@ -1793,6 +1902,14 @@
                     if (getAvailableStock(w.id, i.id) <= (i.minStock || 0)) lowStockCount++;
                 });
             });
+            window.dashboardChartData = {
+                workerStatuses: [
+                    workers.filter(w => w.status === 'Active').length,
+                    workers.filter(w => w.status === 'Waiting').length,
+                    workers.filter(w => w.status === 'Rejected').length
+                ],
+                stockStatuses: [totalNew, totalUsed, totalDamaged, totalLost]
+            };
 
             return `
                 <!-- 1. Company Banner: Name & Details on One Side, Logo on Opposite Side -->
@@ -1877,31 +1994,31 @@
                         <span class="card-hint">🔗 كشف العهد الحالية</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض التوالف في المخازن">
+                    <div class="card card-alert-warning" onclick="navigate('warehouses')" title="انقر لعرض التوالف في المخازن">
                         <div class="card-value" style="color:var(--danger);">${totalDamaged}</div>
                         <div class="card-label">${t('damaged')}</div>
                         <span class="card-hint">🔗 بيان التوالف</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض المفقودات">
+                    <div class="card card-alert-danger" onclick="navigate('warehouses')" title="انقر لعرض المفقودات">
                         <div class="card-value" style="color:var(--danger);">${totalLost}</div>
                         <div class="card-label">${t('lost')}</div>
                         <span class="card-hint">🔗 بيان المفقود</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض الأصناف تحت حد الأمان">
+                    <div class="card card-alert-warning" onclick="navigate('warehouses')" title="انقر لعرض الأصناف تحت حد الأمان">
                         <div class="card-value" style="color:var(--warning);">${lowStockCount}</div>
                         <div class="card-label">⚠️ ${t('low_stock')}</div>
                         <span class="card-hint">🔗 عرض المخازن</span>
                     </div>
 
-                    <div class="card" onclick="navigate('workers', { workerFilter: 'unsettled' })" title="انقر لعرض العمال الذين بطرفهم عهد معلقة">
+                    <div class="card card-alert-danger" onclick="navigate('workers', { workerFilter: 'unsettled' })" title="انقر لعرض العمال الذين بطرفهم عهد معلقة">
                         <div class="card-value" style="color:var(--danger);">${unsettledWorkersCount}</div>
                         <div class="card-label">🚨 عمال بعهدة معلقة</div>
                         <span class="card-hint">🔗 كشف العهد غير المسواة</span>
                     </div>
 
-                    <div class="card" onclick="navigate('workers', { workerFilter: 'left_unsettled' })" title="انقر لعرض العمال المستقيلين ولم يسلموا العهد">
+                    <div class="card card-alert-danger" onclick="navigate('workers', { workerFilter: 'left_unsettled' })" title="انقر لعرض العمال المستقيلين ولم يسلموا العهد">
                         <div class="card-value" style="color:var(--danger);">${workers.filter(w=>(w.status==='Left'||w.status==='Terminated') && getWorkerTotalUnsettled(w.id)>0).length}</div>
                         <div class="card-label">⚠️ مستقيلون لم يسلموا العهد</div>
                         <span class="card-hint">🔗 كشف المستقيلين بعهدة</span>
@@ -1918,6 +2035,16 @@
                         <div class="card-label">🏠 عمارات السكن المسجلة</div>
                         <span class="card-hint">🔗 استعراض العمارات والشقق</span>
                     </div>
+                </div>
+                <div class="dashboard-analytics">
+                    <section class="chart-card">
+                        <h3>📊 حالة العمال</h3>
+                        <div class="chart-wrap skeleton"><canvas id="worker-status-chart" aria-label="رسم حالة العمال"></canvas></div>
+                    </section>
+                    <section class="chart-card">
+                        <h3>📦 حالة العهد والمخازن</h3>
+                        <div class="chart-wrap skeleton"><canvas id="stock-status-chart" aria-label="رسم حالة العهد والمخازن"></canvas></div>
+                    </section>
                 </div>
             `;
         }
