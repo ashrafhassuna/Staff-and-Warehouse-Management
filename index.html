@@ -1788,6 +1788,12 @@
                         <span class="card-hint">🔗 عرض قائمة الانتظار</span>
                     </div>
 
+                    <div class="card" onclick="navigate('workers', { workerFilter: 'Rejected' })" title="انقر لعرض العمال الذين رفضوا من المقابلة">
+                        <div class="card-value" style="color:var(--danger);">${workers.filter(w=>w.status==='Rejected').length}</div>
+                        <div class="card-label">غير مقبولين في العمل</div>
+                        <span class="card-hint">🔗 عرض المرفوضين</span>
+                    </div>
+
                     <div class="card" onclick="navigate('workers', { workerFilter: 'Left' })" title="انقر لعرض العمال المستقيلين والمغادرين">
                         <div class="card-value" style="color:var(--danger);">${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length}</div>
                         <div class="card-label">العمال المستقيلون والمغادرون</div>
@@ -2013,8 +2019,8 @@
             let workerRows = facWorkers.map(w => {
                 const unsettled = getWorkerTotalUnsettled(w.id);
                 const custodySummary = getWorkerCustodySummaryString(w.id);
-                const statusBadge = w.status === 'Active' ? 'badge-success' : (w.status === 'Waiting' ? 'badge-warning' : 'badge-danger');
-                const statusLabel = w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل / مغادر');
+                const statusBadge = w.status === 'Active' ? 'badge-success' : (w.status === 'Waiting' ? 'badge-warning' : (w.status === 'Rejected' ? 'badge-danger' : 'badge-danger'));
+                const statusLabel = w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل / مغادر'));
 
                 return `
                     <tr>
@@ -2465,6 +2471,7 @@
             let filtered = workers;
             if (initialFilter === 'Active') filtered = workers.filter(w => w.status === 'Active');
             if (initialFilter === 'Waiting') filtered = workers.filter(w => w.status === 'Waiting');
+            if (initialFilter === 'Rejected') filtered = workers.filter(w => w.status === 'Rejected');
             if (initialFilter === 'Left') filtered = workers.filter(w => w.status === 'Left' || w.status === 'Terminated');
             if (initialFilter === 'unsettled') filtered = workers.filter(w => getWorkerTotalUnsettled(w.id) > 0);
             if (initialFilter === 'left_unsettled') filtered = workers.filter(w => (w.status === 'Left' || w.status === 'Terminated') && getWorkerTotalUnsettled(w.id) > 0);
@@ -2480,8 +2487,8 @@
                 } else {
                     facName = fac ? fac.name : '-';
                 }
-                const statusBadge = w.status === 'Active' ? 'badge-success' : (w.status === 'Waiting' ? 'badge-warning' : 'badge-danger');
-                const statusLabel = w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل / مغادر');
+                const statusBadge = w.status === 'Active' ? 'badge-success' : (w.status === 'Waiting' ? 'badge-warning' : (w.status === 'Rejected' ? 'badge-danger' : 'badge-danger'));
+                const statusLabel = w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل / مغادر'));
                 
                 // Housing string
                 let housingText = '-';
@@ -2531,6 +2538,7 @@
                             <option value="all" ${initialFilter==='all'?'selected':''}>${t('filter_all')} (${workers.length})</option>
                             <option value="Active" ${initialFilter==='Active'?'selected':''}>${t('filter_active')} (${workers.filter(w=>w.status==='Active').length})</option>
                             <option value="Waiting" ${initialFilter==='Waiting'?'selected':''}>قائمة الانتظار / المرشحون (${workers.filter(w=>w.status==='Waiting').length})</option>
+                            <option value="Rejected" ${initialFilter==='Rejected'?'selected':''}>غير مقبولين في العمل (${workers.filter(w=>w.status==='Rejected').length})</option>
                             <option value="Left" ${initialFilter==='Left'?'selected':''}>${t('filter_left')} (${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length})</option>
                             <option value="unsettled" ${initialFilter==='unsettled'?'selected':''}>${t('filter_unsettled')} (${workers.filter(w=>getWorkerTotalUnsettled(w.id)>0).length})</option>
                             <option value="left_unsettled" ${initialFilter==='left_unsettled'?'selected':''}>${t('filter_left_unsettled')} (${workers.filter(w=>(w.status==='Left'||w.status==='Terminated')&&getWorkerTotalUnsettled(w.id)>0).length})</option>
@@ -2675,6 +2683,7 @@
         function normalizeWorkerStatus(value) {
             const status = String(value || '').trim().toLowerCase();
             if (status.includes('waiting') || status.includes('pending') || status.includes('انتظار') || status.includes('مرشح')) return 'Waiting';
+            if (status.includes('rejected') || status.includes('رفض') || status.includes('غير مقبول') || status.includes('not accepted')) return 'Rejected';
             if (status.includes('left') || status.includes('مستقيل') || status.includes('مغادر')) return 'Left';
             if (status.includes('terminated') || status.includes('منه')) return 'Terminated';
             return 'Active';
@@ -3238,7 +3247,7 @@
                 fields += '<div class="form-row"><div class="form-group"><label>رقم الهاتف *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div><div class="form-group"><label>المسمى الوظيفي *</label><input id="import-edit-jobtitle" value="' + escapeImportValue(row.jobTitle) + '"></div></div>';
                 fields += '<div class="form-row"><div class="form-group"><label>المصنع</label><select id="import-edit-factory"><option value="">-- بدون مصنع --</option>' + factories.map(function(f) { return '<option value="' + f.id + '"' + (Number(f.id) === Number(row.factoryId) ? ' selected' : '') + '>' + escapeImportValue(f.name) + '</option>'; }).join('') + '</select></div><div class="form-group"><label>عمارة السكن</label><select id="import-edit-building"><option value="">-- بدون سكن --</option>' + housing.map(function(h) { return '<option value="' + h.id + '"' + (Number(h.id) === Number(row.buildingId) ? ' selected' : '') + '>' + escapeImportValue(h.name || ('عمارة ' + h.number)) + '</option>'; }).join('') + '</select></div></div>';
                 fields += '<div class="form-row"><div class="form-group"><label>الرقم القومي</label><input id="import-edit-national-id" value="' + escapeImportValue(row.nationalId) + '"></div><div class="form-group"><label>رقم الشقة</label><input id="import-edit-apartment" value="' + escapeImportValue(row.apartment) + '"></div></div>';
-                fields += '<div class="form-row"><div class="form-group"><label>تاريخ التعيين</label><input type="date" id="import-edit-start-date" value="' + escapeImportValue(normalizeImportedDate(row.startDate)) + '"></div><div class="form-group"><label>الحالة</label><select id="import-edit-status"><option value="Active"' + (row.status === 'Active' ? ' selected' : '') + '>نشط</option><option value="Waiting"' + (row.status === 'Waiting' ? ' selected' : '') + '>قيد الانتظار</option><option value="Left"' + (row.status === 'Left' ? ' selected' : '') + '>مستقيل / مغادر</option><option value="Terminated"' + (row.status === 'Terminated' ? ' selected' : '') + '>منهي الخدمة</option></select></div></div>';
+                fields += '<div class="form-row"><div class="form-group"><label>تاريخ التعيين</label><input type="date" id="import-edit-start-date" value="' + escapeImportValue(normalizeImportedDate(row.startDate)) + '"></div><div class="form-group"><label>الحالة</label><select id="import-edit-status"><option value="Active"' + (row.status === 'Active' ? ' selected' : '') + '>نشط</option><option value="Waiting"' + (row.status === 'Waiting' ? ' selected' : '') + '>قيد الانتظار</option><option value="Rejected"' + (row.status === 'Rejected' ? ' selected' : '') + '>غير مقبول في العمل</option><option value="Left"' + (row.status === 'Left' ? ' selected' : '') + '>مستقيل / مغادر</option><option value="Terminated"' + (row.status === 'Terminated' ? ' selected' : '') + '>منهي الخدمة</option></select></div></div>';
             } else if (type === 'supervisors') {
                 fields += '<div class="form-group"><label>رقم موبيل العمل *</label><input id="import-edit-mobile" value="' + escapeImportValue(row.mobile) + '"></div>';
             } else {
@@ -5333,12 +5342,12 @@
                         <select id="w-status" onchange="document.getElementById('w-edit-waiting-fields').style.display = this.value==='Waiting' ? 'block' : 'none'">
                             <option value="Active" ${worker.status==='Active'?'selected':''}>Active (نشط - على رأس العمل)</option>
                             <option value="Waiting" ${worker.status==='Waiting'?'selected':''}>Waiting (قيد الانتظار - مرشح)</option>
+                            <option value="Rejected" ${worker.status==='Rejected'?'selected':''}>Rejected (غير مقبول في العمل)</option>
                             <option value="Left" ${worker.status==='Left'?'selected':''}>Left (مستقيل ومغادر)</option>
                             <option value="Terminated" ${worker.status==='Terminated'?'selected':''}>Terminated (منهي خدمته)</option>
                         </select>
                     </div>
-                </div>
-                <div id="w-edit-waiting-fields" style="margin-top:10px; ${worker.status==='Waiting' ? '' : 'display:none;'}">
+                </div>                <div id="w-edit-waiting-fields" style="margin-top:10px; ${worker.status==='Waiting' ? '' : 'display:none;'}">
                     <div class="form-row">
                         <div class="form-group">
                             <label>تاريخ الوصول / Arrival Date</label>
@@ -6730,7 +6739,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
                     Object.keys(c).forEach(itmId => {
                         if (c[itmId].total > 0) {
                             const itm = items.find(i => Number(i.id) === Number(itmId)) || { name: `صنف #${itmId}`, unit: 'قطعة' };
-                            rows.push([w.code, w.name, fac, hText, itm.name, `${c[itmId].total} ${itm.unit || 'قطعة'}`, w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل')]);
+                            rows.push([w.code, w.name, fac, hText, itm.name, `${c[itmId].total} ${itm.unit || 'قطعة'}`, w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل'))]);
                         }
                     });
                 });
@@ -6769,7 +6778,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
                     const b = housing.find(h => Number(h.id) === Number(w.buildingId));
                     const bName = b ? `عمارة ${b.number || ''} (${b.name})` : '-';
                     const fac = factories.find(f => Number(f.id) === Number(w.factoryId))?.name || '-';
-                    rows.push([bName, w.apartment ? `شقة ${w.apartment}` : '-', w.code, w.name, w.mobile, fac, w.status === 'Active' ? 'يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل')]);
+                    rows.push([bName, w.apartment ? `شقة ${w.apartment}` : '-', w.code, w.name, w.mobile, fac, w.status === 'Active' ? 'يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل'))]);
                 });
             } else if (sel === 'rep_supervisors') {
                 title = 'تقرير الإداريين والمصانع التابعة لهم';
@@ -6785,14 +6794,14 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
                 rows = workers.map(w => [
                     w.code, w.name, w.jobTitle || '-', w.mobile, w.nationalId || '-',
                     factories.find(f => Number(f.id) === Number(w.factoryId))?.name || '-',
-                    w.startDate || '-', w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل / مغادر')
+                    w.startDate || '-', w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل / مغادر'))
                 ]);
             } else if (sel === '2') {
                 title = 'تقرير العمال حسب المصنع';
                 headers = ['المصنع', 'كود العامل', 'اسم العامل', 'المسمى الوظيفي', 'الهاتف', 'الحالة'];
                 workers.forEach(w => {
                     const fac = factories.find(f => Number(f.id) === Number(w.factoryId))?.name || '-';
-                    rows.push([fac, w.code, w.name, w.jobTitle || '-', w.mobile, w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : 'مستقيل / مغادر')]);
+                    rows.push([fac, w.code, w.name, w.jobTitle || '-', w.mobile, w.status === 'Active' ? 'ما زال يعمل' : (w.status === 'Waiting' ? 'قيد الانتظار' : (w.status === 'Rejected' ? 'غير مقبول في العمل' : 'مستقيل / مغادر'))]);
                 });
             } else if (sel === '3') {
                 title = 'تقرير عهد العمال المفصل';
