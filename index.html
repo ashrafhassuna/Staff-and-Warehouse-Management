@@ -2,6 +2,7 @@
 <html lang="ar" dir="rtl" data-theme="light">
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>نظام إدارة العهد والعاملين | Worker Custody Management System</title>
@@ -14,15 +15,15 @@
             --primary-hover: #1d4ed8;
             --secondary: #10b981;     /* Emerald Green */
             --secondary-hover: #059669;
-            --bg: #f8fafc;
+            --bg: #f8f9fa;
             --surface: #ffffff;
             --text: #0f172a;
             --text-secondary: #64748b;
             --border: #e2e8f0;
             --danger: #ef4444;
             --warning: #f59e0b;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.08);
-            --radius: 10px;
+            --shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
+            --radius: 12px;
         }
 
         [data-theme="dark"] {
@@ -34,10 +35,13 @@
             --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
         }
 
+        [data-theme="dark"] .card-alert-danger { background: rgba(239, 68, 68, 0.14); }
+        [data-theme="dark"] .card-alert-warning { background: rgba(245, 158, 11, 0.14); }
+
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
         body {
-            font-family: 'Times New Roman', Times, serif;
+            font-family: 'Cairo', sans-serif;
             background: var(--bg);
             color: var(--text);
             display: flex;
@@ -114,7 +118,7 @@
             align-items: center;
             gap: 12px;
             color: var(--text-secondary);
-            transition: all 0.2s ease;
+            transition: background-color 0.25s ease, color 0.25s ease, border-color 0.25s ease, padding-right 0.25s ease;
             font-size: 1.05rem;
             border-right: 4px solid transparent;
         }
@@ -125,6 +129,7 @@
             color: var(--primary);
             border-right-color: var(--primary);
             font-weight: bold;
+            padding-right: 24px;
         }
         [dir="ltr"] .nav-item:hover, [dir="ltr"] .nav-item.active {
             border-left-color: var(--primary);
@@ -139,8 +144,21 @@
             display: flex;
             flex-direction: column;
             min-height: 100vh;
+            transition: margin 0.3s ease;
         }
         [dir="ltr"] .main-content { margin-right: 0; margin-left: 250px; }
+        .sidebar, .sidebar-header, .nav-item { transition: width 0.3s ease, padding 0.3s ease, background-color 0.25s ease, color 0.25s ease; }
+        body.sidebar-collapsed .sidebar { width: 78px; }
+        body.sidebar-collapsed .main-content { margin-right: 78px; }
+        [dir="ltr"] body.sidebar-collapsed .main-content { margin-right: 0; margin-left: 78px; }
+        body.sidebar-collapsed .sidebar-header h2,
+        body.sidebar-collapsed .sidebar-header .company-sub,
+        body.sidebar-collapsed .nav-item > span:last-child,
+        body.sidebar-collapsed .sidebar > div:last-child { display: none; }
+        body.sidebar-collapsed .sidebar-header { padding: 0 8px 20px; }
+        body.sidebar-collapsed .nav-item { justify-content: center; padding: 13px 8px; }
+        body.sidebar-collapsed .nav-icon { width: auto; }
+        .sidebar-toggle { flex: 0 0 auto; }
 
         .top-bar {
             display: flex;
@@ -169,6 +187,62 @@
             align-items: center;
             gap: 10px;
         }
+        .quick-search {
+            width: min(250px, 24vw);
+            min-width: 170px;
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--bg);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        .quick-search:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+        }
+        .search-command-wrap { position: relative; display: flex; align-items: center; width: min(350px, 40vw); }
+        .quick-search { width: 100%; padding: 10px 18px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--text); font: inherit; outline: none; transition: all 0.3s ease; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+        .quick-search:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+        .command-dropdown { position: absolute; top: calc(100% + 10px); right: 0; width: 100%; display: none; z-index: 1000; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15); max-height: 350px; overflow-y: auto; }
+        .command-dropdown.active { display: block; animation: slideDown 0.2s ease-out; }
+        @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+        .command-item { width: 100%; padding: 12px 15px; display: flex; align-items: center; gap: 12px; border: 0; border-radius: 8px; background: transparent; color: var(--text); font: inherit; font-size: 0.95rem; text-align: right; cursor: pointer; transition: background 0.2s, color 0.2s; }
+        [dir="ltr"] .command-item { text-align: left; }
+        .command-item:hover { background: rgba(37, 99, 235, 0.08); color: var(--primary); font-weight: bold; }
+        .command-shortcut { margin-right: auto; font-size: 0.75rem; color: var(--text-secondary); background: var(--bg); padding: 2px 6px; border-radius: 4px; border: 1px solid var(--border); }
+        [dir="ltr"] .command-shortcut { margin-right: 0; margin-left: auto; }
+        .command-dropdown {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            width: min(330px, 80vw);
+            display: none;
+            z-index: 120;
+            padding: 6px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 14px 30px rgba(15, 23, 42, 0.16);
+        }
+        .command-dropdown.active { display: block; }
+        .command-item {
+            width: 100%;
+            padding: 10px 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            border: 0;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text);
+            font: inherit;
+            text-align: right;
+            cursor: pointer;
+        }
+        .command-item:hover { background: rgba(37, 99, 235, 0.09); color: var(--primary); }
         .operator-box {
             display: flex;
             align-items: center;
@@ -280,21 +354,39 @@
         }
         .card {
             background: var(--surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
+            border: none;
+            border-radius: 12px;
             padding: 20px;
             text-align: center;
             box-shadow: var(--shadow);
-            transition: all 0.2s ease;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
             cursor: pointer;
             position: relative;
+            animation: dashboard-card-in 0.55s ease both;
         }
         .card:hover {
-            transform: translateY(-3px);
-            border-color: var(--primary);
-            box-shadow: 0 8px 15px -3px rgba(37, 99, 235, 0.15);
+            transform: translateY(-5px);
+            box-shadow: 0 14px 28px rgba(15, 23, 42, 0.12);
         }
         .card:active { transform: translateY(0); }
+        .dashboard-cards .card:nth-child(1) { animation-delay: 0.05s; }
+        .dashboard-cards .card:nth-child(2) { animation-delay: 0.1s; }
+        .dashboard-cards .card:nth-child(3) { animation-delay: 0.15s; }
+        .dashboard-cards .card:nth-child(4) { animation-delay: 0.2s; }
+        .dashboard-cards .card:nth-child(5) { animation-delay: 0.25s; }
+        .dashboard-cards .card:nth-child(6) { animation-delay: 0.3s; }
+        .dashboard-cards .card:nth-child(7) { animation-delay: 0.35s; }
+        .dashboard-cards .card:nth-child(8) { animation-delay: 0.4s; }
+        .dashboard-cards .card:nth-child(9) { animation-delay: 0.45s; }
+        .dashboard-cards .card:nth-child(10) { animation-delay: 0.5s; }
+        .dashboard-cards .card:nth-child(11) { animation-delay: 0.55s; }
+        .dashboard-cards .card:nth-child(12) { animation-delay: 0.6s; }
+        .dashboard-cards .card:nth-child(13) { animation-delay: 0.65s; }
+        .dashboard-cards .card:nth-child(14) { animation-delay: 0.7s; }
+        @keyframes dashboard-card-in {
+            from { opacity: 0; transform: translateY(16px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
         .card-value { font-size: 2.2rem; font-weight: bold; color: var(--primary); }
         .card-label { color: var(--text-secondary); margin-top: 6px; font-size: 0.95rem; font-weight: 500; }
         .card-hint {
@@ -303,6 +395,42 @@
             margin-top: 8px;
             opacity: 0.85;
             display: inline-block;
+        }
+        .card-alert-danger { background: rgba(239, 68, 68, 0.07); }
+        .card-alert-warning { background: rgba(245, 158, 11, 0.09); }
+        .dashboard-analytics {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 18px;
+            margin-bottom: 25px;
+        }
+        .chart-card {
+            min-height: 300px;
+            padding: 18px;
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+        .chart-card h3 { color: var(--text); font-size: 1rem; margin-bottom: 12px; }
+        .chart-wrap { position: relative; height: 245px; }
+        .skeleton {
+            position: relative;
+            overflow: hidden;
+            color: transparent !important;
+            background: linear-gradient(90deg, var(--border) 25%, rgba(255,255,255,0.65) 50%, var(--border) 75%) !important;
+            background-size: 200% 100% !important;
+            animation: skeleton-shimmer 1.2s infinite linear;
+        }
+        .skeleton * { visibility: hidden; }
+        @keyframes skeleton-shimmer { to { background-position: -200% 0; } }
+        @media (max-width: 900px) {
+            .dashboard-analytics { grid-template-columns: 1fr; }
+            .search-command-wrap { width: 100%; }
+            .quick-search { width: 100%; min-width: 0; }
+            .command-dropdown { width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            .card, .nav-item { animation: none; transition: none; }
         }
 
         /* Cards Grid for Warehouses & Factories */
@@ -511,6 +639,7 @@
 
         @media (max-width: 768px) {
             .mobile-menu-btn { display: inline-flex; align-items: center; justify-content: center; }
+            .sidebar-toggle { display: none; }
             .sidebar {
                 transform: translateX(100%);
                 transition: transform 0.3s ease;
@@ -694,15 +823,15 @@
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
     <script>
-      // إعدادات مشروع Firebase - Staff and Warehouse Management (Belgium)
+      // إعدادات مشروع Firebase للفرع التجريبي
       const firebaseConfig = {
-        apiKey: "AIzaSyCg1pR9jUL069n9J0PVYhAlnWNCAMHyXTo",
-        authDomain: "staff-and-warehouse-management.firebaseapp.com",
-        databaseURL: "https://staff-and-warehouse-management-default-rtdb.europe-west1.firebasedatabase.app",
-        projectId: "staff-and-warehouse-management",
-        storageBucket: "staff-and-warehouse-management.firebasestorage.app",
-        messagingSenderId: "519235350052",
-        appId: "1:519235350052:web:f39d1eda2a424e285132b1"
+        apiKey: "AIzaSyAN1Jsluf5-trgTmIk_GriiklbL0jmEinc",
+        authDomain: "staff-warehouse-testing.firebaseapp.com",
+        databaseURL: "https://staff-warehouse-testing-default-rtdb.europe-west1.firebasedatabase.app",
+        projectId: "staff-warehouse-testing",
+        storageBucket: "staff-warehouse-testing.firebasestorage.app",
+        messagingSenderId: "566749537903",
+        appId: "1:566749537903:web:f1f26f031d20b510084f9a"
       };
       firebase.initializeApp(firebaseConfig);
       const db = firebase.database();
@@ -827,10 +956,15 @@
     <main class="main-content">
         <div class="top-bar">
             <div class="top-bar-left">
+                <button class="btn sidebar-toggle" id="sidebar-toggle" onclick="toggleSidebarCollapse()" title="طي أو توسيع القائمة الجانبية" aria-label="طي أو توسيع القائمة الجانبية">☰</button>
                 <button class="mobile-menu-btn" id="mobile-hamburger-btn" onclick="toggleMobileSidebar(true)" title="القائمة">☰</button>
                 <h1 id="page-title">لوحة التحكم</h1>
             </div>
             <div class="top-bar-actions">
+                <div class="search-command-wrap" id="main-search-wrap">
+                    <input id="dashboard-quick-search" class="quick-search" type="search" placeholder="🔎 بحث سريع في الجداول أو اكتب أمراً..." autocomplete="off">
+                    <div id="command-dropdown" class="command-dropdown" role="menu"></div>
+                </div>
                 <div class="operator-box" title="المستخدم النشط حالياً">
                     <label>👤 المستخدم:</label>
                     <span id="current-user-display">Acc. Ashraf Hassuna</span>
@@ -891,6 +1025,22 @@
         // ==========================================
         // 1. TRANSLATIONS (i18n)
         // ==========================================
+        // ==========================================
+        // 0. ARABIC TEXT NORMALIZATION (search helper)
+        // ==========================================
+        function normalizeArabic(text) {
+            if (!text) return '';
+            return String(text)
+                .replace(/[\u0623\u0625\u0622]/g, '\u0627')
+                .replace(/[\u0649\u064A]/g, '\u064A')
+                .replace(/\u0629/g, '\u0647')
+                .replace(/[\u064B-\u0652]/g, '')
+                .replace(/\u0640/g, '')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .toLowerCase();
+        }
+
         const i18n = {
             ar: {
                 // Navigation
@@ -1693,6 +1843,229 @@
             }
         }
 
+        function toggleSidebarCollapse() {
+            if (window.innerWidth <= 768) return;
+            const collapsed = document.body.classList.toggle('sidebar-collapsed');
+            localStorage.setItem('Sistym_SidebarCollapsed', collapsed ? '1' : '0');
+        }
+
+        function restoreSidebarCollapse() {
+            if (window.innerWidth > 768 && localStorage.getItem('Sistym_SidebarCollapsed') === '1') {
+                document.body.classList.add('sidebar-collapsed');
+            }
+        }
+
+        function animateDashboardCounters() {
+            if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+            document.querySelectorAll('.dashboard-cards .card-value').forEach(element => {
+                const target = Number(element.textContent.trim().replace(/,/g, ''));
+                if (!Number.isFinite(target) || target <= 0) {
+                    if (target === 0) element.textContent = '0';
+                    return;
+                }
+
+                const duration = 750;
+                const startedAt = performance.now();
+                element.textContent = '0';
+
+                function updateCounter(now) {
+                    const progress = Math.min((now - startedAt) / duration, 1);
+                    const easedProgress = 1 - Math.pow(1 - progress, 3);
+                    element.textContent = String(Math.round(target * easedProgress));
+                    if (progress < 1) requestAnimationFrame(updateCounter);
+                }
+
+                requestAnimationFrame(updateCounter);
+            });
+        }
+
+        let dashboardCharts = [];
+
+        function renderDashboardCharts(chartData) {
+            if (typeof Chart === 'undefined') {
+                console.warn('Chart.js لم يتم تحميلها؛ سيتم عرض البطاقات بدون الرسوم البيانية.');
+                return;
+            }
+
+            dashboardCharts.forEach(chart => chart.destroy());
+            dashboardCharts = [];
+            const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#0f172a';
+            const gridColor = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#e2e8f0';
+            const pieCanvas = document.getElementById('worker-status-chart');
+            const stockCanvas = document.getElementById('stock-status-chart');
+            if (!pieCanvas || !stockCanvas) return;
+
+            dashboardCharts.push(new Chart(pieCanvas, {
+                type: 'pie',
+                data: {
+                    labels: ['نشطون', 'قيد الانتظار', 'غير مقبولين'],
+                    datasets: [{ data: chartData.workerStatuses, backgroundColor: ['#10b981', '#2563eb', '#ef4444'], borderWidth: 0 }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { color: textColor, font: { family: 'Cairo' } } } } }
+            }));
+
+            dashboardCharts.push(new Chart(stockCanvas, {
+                type: 'bar',
+                data: {
+                    labels: ['جديد', 'مرتجع صالح', 'تالف', 'مفقود'],
+                    datasets: [{ label: 'الكمية', data: chartData.stockStatuses, backgroundColor: ['#2563eb', '#10b981', '#f59e0b', '#ef4444'], borderRadius: 7, borderSkipped: false }]
+                },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, ticks: { color: textColor }, grid: { color: gridColor } }, x: { ticks: { color: textColor }, grid: { display: false } } },
+                    plugins: { legend: { display: false } }
+                }
+            }));
+            document.querySelectorAll('.dashboard-analytics .skeleton').forEach(element => element.classList.remove('skeleton'));
+        }
+
+        function filterDashboardCards(value) {
+            const query = String(value || '').trim().toLocaleLowerCase();
+            document.querySelectorAll('.dashboard-cards .card').forEach(card => {
+                const matches = !query || card.textContent.toLocaleLowerCase().includes(query);
+                card.style.display = matches ? '' : 'none';
+            });
+        }
+
+        const quickCommands = [
+            { icon: '➕', label: 'إضافة عامل', keywords: 'عامل موظف workers add', action: () => openWorkerAddModal() },
+            { icon: '🏭', label: 'إضافة مصنع', keywords: 'مصنع factories add', action: () => openFactoryAddModal() },
+            { icon: '📤', label: 'صرف عهدة', keywords: 'صرف عهدة issue custody', action: () => openIssueModal() },
+            { icon: '📥', label: 'رد عهدة', keywords: 'رد عهدة return custody', action: () => openReturnModal() },
+            { icon: '👷', label: 'تصفية العمال', keywords: 'العمال عامل filter workers', action: () => navigate('workers') },
+            { icon: '📊', label: 'فتح لوحة التحكم', keywords: 'لوحة تحكم dashboard home', action: () => navigate('dashboard') }
+        ];
+
+        function filterCurrentView(query) {
+            const normalizedQuery = normalizeArabic(query);
+            if (document.querySelector('.dashboard-cards')) {
+                document.querySelectorAll('.dashboard-cards .card').forEach(card => {
+                    const text = normalizeArabic(card.textContent);
+                    card.style.display = !normalizedQuery || text.includes(normalizedQuery) ? '' : 'none';
+                });
+            }
+            document.querySelectorAll('#view-container tbody tr').forEach(row => {
+                const text = normalizeArabic(row.textContent);
+                row.style.display = !normalizedQuery || text.includes(normalizedQuery) ? '' : 'none';
+            });
+            document.querySelectorAll('#view-container .grid-card').forEach(card => {
+                const text = normalizeArabic(card.textContent);
+                card.style.display = !normalizedQuery || text.includes(normalizedQuery) ? '' : 'none';
+            });
+        }
+
+        function renderCommandResults(query) {
+            const dropdown = document.getElementById('command-dropdown');
+            if (!dropdown) return;
+            const normalizedQuery = normalizeArabic(query);
+            if (!normalizedQuery) {
+                dropdown.classList.remove('active');
+                return;
+            }
+            const matches = quickCommands
+                .map((command, realIndex) => ({ command, realIndex }))
+                .filter(({ command }) =>
+                    normalizeArabic(`${command.label} ${command.keywords}`).includes(normalizedQuery)
+                );
+            if (matches.length > 0) {
+                dropdown.innerHTML = matches.map(({ command, realIndex }) => `
+                    <button type="button" class="command-item" onclick="executeCommand(${realIndex})">
+                        <span style="font-size: 1.2rem;">${command.icon}</span> 
+                        <span>${command.label}</span>
+                        <span class="command-shortcut">↵ Enter</span>
+                    </button>
+                `).join('');
+                dropdown.classList.add('active');
+            } else {
+                dropdown.innerHTML = `
+                    <div style="padding: 10px; text-align: center; color: var(--text-secondary); font-size: 0.85rem;">
+                        <span style="font-size: 1.5rem; display:block; margin-bottom: 5px;">🔍</span>
+                        جاري تصفية البيانات المعروضة...
+                    </div>
+                `;
+                dropdown.classList.add('active');
+            }
+        }
+
+        function executeCommand(index) {
+            const searchInput = document.getElementById('dashboard-quick-search');
+            const dropdown = document.getElementById('command-dropdown');
+            if (searchInput) searchInput.value = '';
+            if (dropdown) dropdown.classList.remove('active');
+            filterCurrentView('');
+            if (quickCommands[index]) quickCommands[index].action();
+        }
+
+        function bindSmartSearch() {
+            const searchInput = document.getElementById('dashboard-quick-search');
+            if (!searchInput || searchInput.dataset.bound === 'true') return;
+            searchInput.dataset.bound = 'true';
+            searchInput.addEventListener('input', (e) => {
+                const val = e.target.value;
+                filterCurrentView(val);
+                renderCommandResults(val);
+            });
+            searchInput.addEventListener('keydown', (e) => {
+                const dropdown = document.getElementById('command-dropdown');
+                if (e.key === 'Escape') {
+                    searchInput.value = '';
+                    filterCurrentView('');
+                    if (dropdown) dropdown.classList.remove('active');
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    const firstCommandBtn = dropdown ? dropdown.querySelector('.command-item') : null;
+                    if (firstCommandBtn) firstCommandBtn.click();
+                }
+            });
+            if (document.body.dataset.searchDismissBound !== 'true') {
+                document.body.dataset.searchDismissBound = 'true';
+                document.addEventListener('click', (e) => {
+                    const wrap = document.getElementById('main-search-wrap');
+                    const dropdown = document.getElementById('command-dropdown');
+                    if (wrap && !wrap.contains(e.target) && dropdown) {
+                        dropdown.classList.remove('active');
+                    }
+                });
+            }
+            bindGlobalSearchShortcut();
+        }
+
+        // التقاط الكتابة من أي مكان في الشاشة وتحويلها للبحث السريع
+        function bindGlobalSearchShortcut() {
+            if (document.body.dataset.globalSearchBound === 'true') return;
+            document.body.dataset.globalSearchBound = 'true';
+
+            document.addEventListener('keydown', (e) => {
+                const searchInput = document.getElementById('dashboard-quick-search');
+                if (!searchInput) return;
+
+                // تجاهل الاختصارات والمفاتيح الخاصة
+                if (e.ctrlKey || e.metaKey || e.altKey) return;
+                if (e.key.length !== 1) return;
+                if (e.key === ' ') return;
+
+                // لا تعمل أثناء الكتابة داخل أي حقل
+                const el = e.target;
+                const tag = (el && el.tagName ? el.tagName : '').toUpperCase();
+                if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+
+                // لا تعمل والنوافذ المنبثقة أو شاشة الدخول مفتوحة
+                if (document.getElementById('modal-overlay')?.classList.contains('active')) return;
+                const authScreen = document.getElementById('auth-screen');
+                if (authScreen && authScreen.style.display !== 'none') return;
+
+                e.preventDefault();
+                searchInput.focus();
+                searchInput.value = searchInput.value + e.key;
+                filterCurrentView(searchInput.value);
+                renderCommandResults(searchInput.value);
+            });
+        }
+
+        function bindDashboardEnhancements(chartData) {
+            renderDashboardCharts(chartData);
+        }
+
         function navigate(viewName, params = {}) {
             currentFilterState = params;
             saveLastView(viewName, params);
@@ -1707,6 +2080,11 @@
             if (views[viewName]) {
                 container.innerHTML = views[viewName]();
                 bindViewEvents(viewName);
+                bindSmartSearch();
+                if (viewName === 'dashboard') {
+                    animateDashboardCounters();
+                    bindDashboardEnhancements(window.dashboardChartData || { workerStatuses: [0, 0, 0], stockStatuses: [0, 0, 0, 0] });
+                }
             }
         }
 
@@ -1746,6 +2124,14 @@
                     if (getAvailableStock(w.id, i.id) <= (i.minStock || 0)) lowStockCount++;
                 });
             });
+            window.dashboardChartData = {
+                workerStatuses: [
+                    workers.filter(w => w.status === 'Active').length,
+                    workers.filter(w => w.status === 'Waiting').length,
+                    workers.filter(w => w.status === 'Rejected').length
+                ],
+                stockStatuses: [totalNew, totalUsed, totalDamaged, totalLost]
+            };
 
             return `
                 <!-- 1. Company Banner: Name & Details on One Side, Logo on Opposite Side -->
@@ -1830,31 +2216,31 @@
                         <span class="card-hint">🔗 كشف العهد الحالية</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض التوالف في المخازن">
+                    <div class="card card-alert-warning" onclick="navigate('warehouses')" title="انقر لعرض التوالف في المخازن">
                         <div class="card-value" style="color:var(--danger);">${totalDamaged}</div>
                         <div class="card-label">${t('damaged')}</div>
                         <span class="card-hint">🔗 بيان التوالف</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض المفقودات">
+                    <div class="card card-alert-danger" onclick="navigate('warehouses')" title="انقر لعرض المفقودات">
                         <div class="card-value" style="color:var(--danger);">${totalLost}</div>
                         <div class="card-label">${t('lost')}</div>
                         <span class="card-hint">🔗 بيان المفقود</span>
                     </div>
 
-                    <div class="card" onclick="navigate('warehouses')" title="انقر لعرض الأصناف تحت حد الأمان">
+                    <div class="card card-alert-warning" onclick="navigate('warehouses')" title="انقر لعرض الأصناف تحت حد الأمان">
                         <div class="card-value" style="color:var(--warning);">${lowStockCount}</div>
                         <div class="card-label">⚠️ ${t('low_stock')}</div>
                         <span class="card-hint">🔗 عرض المخازن</span>
                     </div>
 
-                    <div class="card" onclick="navigate('workers', { workerFilter: 'unsettled' })" title="انقر لعرض العمال الذين بطرفهم عهد معلقة">
+                    <div class="card card-alert-danger" onclick="navigate('workers', { workerFilter: 'unsettled' })" title="انقر لعرض العمال الذين بطرفهم عهد معلقة">
                         <div class="card-value" style="color:var(--danger);">${unsettledWorkersCount}</div>
                         <div class="card-label">🚨 عمال بعهدة معلقة</div>
                         <span class="card-hint">🔗 كشف العهد غير المسواة</span>
                     </div>
 
-                    <div class="card" onclick="navigate('workers', { workerFilter: 'left_unsettled' })" title="انقر لعرض العمال المستقيلين ولم يسلموا العهد">
+                    <div class="card card-alert-danger" onclick="navigate('workers', { workerFilter: 'left_unsettled' })" title="انقر لعرض العمال المستقيلين ولم يسلموا العهد">
                         <div class="card-value" style="color:var(--danger);">${workers.filter(w=>(w.status==='Left'||w.status==='Terminated') && getWorkerTotalUnsettled(w.id)>0).length}</div>
                         <div class="card-label">⚠️ مستقيلون لم يسلموا العهد</div>
                         <span class="card-hint">🔗 كشف المستقيلين بعهدة</span>
@@ -1871,6 +2257,16 @@
                         <div class="card-label">🏠 عمارات السكن المسجلة</div>
                         <span class="card-hint">🔗 استعراض العمارات والشقق</span>
                     </div>
+                </div>
+                <div class="dashboard-analytics">
+                    <section class="chart-card">
+                        <h3>📊 حالة العمال</h3>
+                        <div class="chart-wrap skeleton"><canvas id="worker-status-chart" aria-label="رسم حالة العمال"></canvas></div>
+                    </section>
+                    <section class="chart-card">
+                        <h3>📦 حالة العهد والمخازن</h3>
+                        <div class="chart-wrap skeleton"><canvas id="stock-status-chart" aria-label="رسم حالة العهد والمخازن"></canvas></div>
+                    </section>
                 </div>
             `;
         }
@@ -2094,10 +2490,10 @@
         }
 
         function filterFacWorkersTable(val) {
-            const term = val.toLowerCase();
+            const term = normalizeArabic(val);
             const rows = document.querySelectorAll('#fac-workers-table tbody tr');
             rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+                r.style.display = !term || normalizeArabic(r.textContent).includes(term) ? '' : 'none';
             });
         }
 
@@ -2420,10 +2816,10 @@
         }
 
         function filterWarehouseItemsTable(val) {
-            const term = val.toLowerCase();
+            const term = normalizeArabic(val);
             const rows = document.querySelectorAll('#wh-items-table tbody tr');
             rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+                r.style.display = !term || normalizeArabic(r.textContent).includes(term) ? '' : 'none';
             });
         }
 
@@ -2579,10 +2975,10 @@
         function applyWorkerFilter(val) { navigate('workers', { workerFilter: val }); }
 
         function filterWorkersTableLive() {
-            const term = document.getElementById('worker-search').value.toLowerCase();
+            const term = normalizeArabic(document.getElementById('worker-search')?.value);
             const rows = document.querySelectorAll('#workers-table tbody tr');
             rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+                r.style.display = !term || normalizeArabic(r.textContent).includes(term) ? '' : 'none';
             });
         }
 
@@ -3469,10 +3865,10 @@
         }
 
         function filterSupervisorsTableLive() {
-            const term = document.getElementById('supervisor-search').value.toLowerCase();
+            const term = normalizeArabic(document.getElementById('supervisor-search')?.value);
             const rows = document.querySelectorAll('#supervisors-table tbody tr');
             rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+                r.style.display = !term || normalizeArabic(r.textContent).includes(term) ? '' : 'none';
             });
         }
 
@@ -4068,10 +4464,10 @@
         function filterHousingWorkerOptions(search) {
             const list = document.getElementById('assign-worker-list');
             if (!list) return;
-            const query = String(search || '').trim().toLowerCase();
+            const query = normalizeArabic(search);
             const workers = window._housingAssignWorkers || [];
             list.innerHTML = workers
-                .filter(w => `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
+                .filter(w => !query || normalizeArabic(`${w.code} ${w.name} ${w.nationalId || ''}`).includes(query))
                 .map(w => `
                     <label style="display:flex; align-items:center; gap:6px; padding:9px 8px; margin:0; cursor:pointer; border-bottom:1px solid var(--border);">
                         <input type="checkbox" class="assign-worker-check" value="${w.id}" ${window._housingSelectedWorkerIds?.has(Number(w.id)) ? 'checked' : ''} onchange="updateHousingWorkerSelection()" style="width:15px; height:15px; flex:0 0 15px; margin:0;">
@@ -4874,13 +5270,13 @@
         }
 
         function filterAuditTableLive() {
-            const term = (document.getElementById('audit-search')?.value || '').toLowerCase();
+            const term = normalizeArabic(document.getElementById('audit-search')?.value);
             const modFilter = document.getElementById('audit-module-filter')?.value || 'all';
             const actionFilter = document.getElementById('audit-action-filter')?.value || 'all';
             const rows = document.querySelectorAll('#audit-table tbody tr');
 
             rows.forEach(r => {
-                const textMatch = r.textContent.toLowerCase().includes(term);
+                const textMatch = !term || normalizeArabic(r.textContent).includes(term);
                 const rMod = r.getAttribute('data-module') || '';
                 const rAct = r.getAttribute('data-action') || '';
                 const isReversed = r.classList.contains('audit-reversed');
@@ -6053,9 +6449,9 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
         }
 
         function issueWorkerOptions(search = '', selectedId = null) {
-            const query = String(search || '').trim().toLowerCase();
+            const query = normalizeArabic(search);
             return (window._issueWorkers || DB.get('Workers').filter(w => w.status === 'Active'))
-                .filter(w => !query || `${w.code} ${w.name} ${w.nationalId || ''}`.toLowerCase().includes(query))
+                .filter(w => !query || normalizeArabic(`${w.code} ${w.name} ${w.nationalId || ''}`).includes(query))
                 .map(w => `<option value="${w.id}" ${Number(selectedId) === Number(w.id) ? 'selected' : ''}>${w.code} - ${w.name}</option>`)
                 .join('');
         }
@@ -7114,6 +7510,7 @@ const jobTitle = document.getElementById('w-jobtitle') ? document.getElementById
         const savedTheme = localStorage.getItem('sistym_theme') || 'light';
         document.documentElement.setAttribute('data-theme', savedTheme);
         document.getElementById('theme-toggle').textContent = savedTheme === 'light' ? '🌙' : '☀️';
+        restoreSidebarCollapse();
         updateSidebarLabels();
 
         // Firebase Auth state listener
