@@ -534,20 +534,71 @@
         }
 
         /* Print & PDF Styling */
+        .print-header { display: none; }
+        .print-signatures-footer { display: none; }
         @media print {
             .sidebar, .top-bar, .btn, .modal-overlay, #lang-toggle, #theme-toggle, .no-print, .auth-overlay, .mobile-menu-btn, .sidebar-backdrop {
                 display: none !important;
             }
-            body { background: #fff !important; color: #000 !important; font-size: 12pt; display: block; }
+            body { background: #fff !important; color: #000 !important; font-size: 12pt; display: block; direction: rtl; }
             .main-content { margin: 0 !important; padding: 0 !important; }
             .view-container { border: none !important; box-shadow: none !important; padding: 0 !important; }
             table { width: 100% !important; border-collapse: collapse; }
             th, td { border: 1px solid #555 !important; padding: 7px 9px !important; }
             .print-header { display: block !important; margin-bottom: 20px; }
-            .footer { display: block !important; position: fixed; bottom: 0; width: 100%; font-size: 10pt; }
+            .footer { display: none !important; }
             .no-print-in-table { display: none !important; }
+
+            /* توقيعات التقارير عند الطباعة فقط */
+            .print-signatures-footer {
+                display: block !important;
+                margin-top: 45px !important;
+                padding-top: 25px !important;
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+                width: 100% !important;
+                direction: rtl !important;
+            }
+            .print-sig-container {
+                display: flex !important;
+                justify-content: space-between !important;
+                align-items: flex-start !important;
+                width: 100% !important;
+                direction: rtl !important;
+            }
+            .print-sig-col.right-col {
+                display: flex !important;
+                flex-direction: column !important;
+                gap: 40px !important;
+                width: 260px !important;
+            }
+            .print-sig-col.left-col {
+                display: flex !important;
+                flex-direction: column !important;
+                align-items: center !important;
+                width: 260px !important;
+            }
+            .print-sig-item {
+                text-align: center !important;
+                width: 100% !important;
+            }
+            .sig-line {
+                border-bottom: 1.5px dashed #222 !important;
+                height: 45px !important;
+                margin-bottom: 8px !important;
+                width: 100% !important;
+            }
+            .sig-title {
+                font-size: 1.05rem !important;
+                font-weight: bold !important;
+                color: #111 !important;
+            }
+            .sig-sub {
+                font-size: 0.85rem !important;
+                color: #555 !important;
+                margin-top: 4px !important;
+            }
         }
-        .print-header { display: none; }
     </style>
 
     <!-- ====== Firebase SDK ====== -->
@@ -633,8 +684,8 @@
                 </div>
                 <div class="form-row">
                     <div class="form-group" style="text-align:right;">
-                        <label>رقم الموبايل</label>
-                        <input type="text" id="reg-mobile" placeholder="01xxxxxxxxx">
+                        <label>رقم الموبايل (إجباري للتأكيد بـ SMS) *</label>
+                        <input type="tel" id="reg-mobile" required placeholder="01xxxxxxxxx">
                     </div>
                     <div class="form-group" style="text-align:right;">
                         <label>البريد الإلكتروني (للدخول واستعادة الحساب) *</label>
@@ -644,14 +695,27 @@
                 <div class="form-row">
                     <div class="form-group" style="text-align:right;">
                         <label>كلمة المرور *</label>
-                        <input type="password" id="reg-password" required placeholder="كلمة المرور">
+                        <input type="password" id="reg-password" required placeholder="6 أحرف على الأقل">
                     </div>
                     <div class="form-group" style="text-align:right;">
                         <label>تأكيد كلمة المرور *</label>
                         <input type="password" id="reg-confirm" required placeholder="تأكيد كلمة المرور">
                     </div>
                 </div>
-                <button type="submit" class="btn btn-success" style="width:100%; justify-content:center; padding:12px; font-size:1.05rem; font-weight:bold;">✨ إنشاء الحساب وبدء الاستخدام</button>
+
+                <!-- Invisible Recaptcha Container for Registration -->
+                <div id="reg-recaptcha-container"></div>
+
+                <!-- OTP Verification Code Box -->
+                <div id="reg-otp-box" style="display:none; margin:12px 0; background:var(--bg); padding:14px; border-radius:8px; border:2px dashed var(--primary); text-align:center;">
+                    <p style="font-size:0.92rem; color:var(--text); margin-bottom:10px; font-weight:bold;">📲 تم إرسال كود التحقق في رسالة SMS لهاتفك. أدخل الكود:</p>
+                    <input type="text" id="reg-phone-otp" maxlength="6" placeholder="• • • • • •" style="text-align:center; font-size:1.4rem; letter-spacing:6px; max-width:220px; font-weight:bold; padding:8px; border:2px solid var(--primary); border-radius:8px; display:inline-block;">
+                </div>
+
+                <div id="reg-actions-row">
+                    <button type="button" id="reg-send-otp-btn" class="btn btn-primary" style="width:100%; justify-content:center; padding:12px; font-size:1.05rem; font-weight:bold;" onclick="handleSendRegistrationOtp()">📲 إرسال كود التحقق للموبايل</button>
+                    <button type="submit" id="reg-submit-btn" class="btn btn-success" style="display:none; width:100%; justify-content:center; padding:12px; font-size:1.05rem; font-weight:bold;">✨ تأكيد الكود وإنشاء الحساب</button>
+                </div>
             </form>
         </div>
     </div>
@@ -722,6 +786,32 @@
 
         <div class="view-container" id="view-container">
             <!-- Dynamic Views are Rendered Here -->
+        </div>
+
+        <!-- Print Signatures Footer (Visible in Print Only) -->
+        <div class="print-signatures-footer" id="print-signatures-footer">
+            <div class="print-sig-container">
+                <!-- يمين التقرير: مدير التشغيل وتحته مدير الموارد البشرية -->
+                <div class="print-sig-col right-col">
+                    <div class="print-sig-item">
+                        <div class="sig-line"></div>
+                        <div class="sig-title">مدير التشغيل</div>
+                    </div>
+                    <div class="print-sig-item">
+                        <div class="sig-line"></div>
+                        <div class="sig-title">مدير الموارد البشرية</div>
+                    </div>
+                </div>
+
+                <!-- يسار التقرير: المدير العام -->
+                <div class="print-sig-col left-col">
+                    <div class="print-sig-item">
+                        <div class="sig-line"></div>
+                        <div class="sig-title">المدير العام</div>
+                        <div class="sig-sub">( يعتمد ،،، )</div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <footer class="footer">
@@ -2769,153 +2859,153 @@
             showImportPreviewModal();
         }
 
-        // --- Import Preview & Confirmation Modal ---
+        // --- Import Preview & Confirmation Modal (Professional Workflow) ---
         function showImportPreviewModal() {
             if (!currentImportState) return;
             const { type, filename, validRows, invalidRows } = currentImportState;
             const typeArabic = type === 'workers' ? 'العمال' : type === 'factories' ? 'المصانع' : 'الإداريين';
-
             const totalRows = validRows.length + invalidRows.length;
+            const allRows = [...invalidRows, ...validRows]; // أخطاء أولاً
+
             if (totalRows === 0) {
                 alert('لم يتم العثور على أي صفوف بيانات صالحة داخل الملف!');
                 currentImportState = null;
                 return;
             }
 
+            const hasErrors = invalidRows.length > 0;
+
+            // ─── جدول العمال مع إمكانية التعديل ────────────────
             let previewTableHtml = '';
+
             if (type === 'workers') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const factories = DB.get('Factories');
+                const facOptions = factories.map(f => '<option value="' + f.code + '">' + f.name + '</option>').join('');
+                const rowsHtml = allRows.map(r => {
                     const isErr = r.errors.length > 0;
-                    return `
-                        <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
-                            <td>#${r.rowNum}</td>
-                            <td><strong>${r.code}</strong></td>
-                            <td>${r.name}</td>
-                            <td>${r.mobile}</td>
-                            <td><span class="badge ${r.jobTitle ? 'badge-primary' : 'badge-danger'}">${r.jobTitle || 'ناقص'}</span></td>
-                            <td>${r.facNameDisplay}</td>
-                            <td>${r.bNameDisplay}</td>
-                            <td>${isErr ? `<span class="badge badge-danger" title="${r.errors.join(' - ')}">❌ ${r.errors.join('، ')}</span>` : '<span class="badge badge-success">جاهز للحفظ ✔️</span>'}</td>
-                        </tr>
-                    `;
+                    // تفاصيل الأخطاء
+                    const errDetails = isErr ? r.errors.map(e => {
+                        const errType = typeof e === 'object' ? e : { col: '?', val: '?', type: '?', reason: e };
+                        return '<div style="font-size:0.78rem;color:var(--danger);margin-bottom:2px;">' +
+                            '🔴 <strong>الصف #' + r.rowNum + '</strong> | العمود: <strong>' + errType.col + '</strong>' +
+                            ' | القيمة: <code style="background:#fee2e2;padding:1px 4px;border-radius:3px;">' + (errType.val || 'فارغ') + '</code>' +
+                            ' | النوع: <span style="color:#b91c1c;">' + errType.type + '</span>' +
+                            ' | السبب: ' + errType.reason + '</div>';
+                    }).join('') : '';
+
+                    return '<tr data-rownum="' + r.rowNum + '" style="' + (isErr ? 'background:rgba(239,68,68,0.06);' : '') + '">' +
+                        '<td style="font-weight:bold;white-space:nowrap;">#' + r.rowNum + '</td>' +
+                        '<td><input data-field="code" style="width:90px;padding:3px 5px;font-size:0.8rem;" value="' + (r.code || '') + '"></td>' +
+                        '<td><input data-field="name" style="width:130px;padding:3px 5px;font-size:0.8rem;' + (!r.name ? 'border-color:var(--danger);' : '') + '" value="' + (r.name || '') + '"></td>' +
+                        '<td><input data-field="mobile" style="width:110px;padding:3px 5px;font-size:0.8rem;' + (!r.mobile ? 'border-color:var(--danger);' : '') + '" value="' + (r.mobile || '') + '"></td>' +
+                        '<td><input data-field="jobtitle" style="width:110px;padding:3px 5px;font-size:0.8rem;' + (!r.jobTitle ? 'border-color:var(--danger);' : '') + '" value="' + (r.jobTitle || '') + '"></td>' +
+                        '<td><input data-field="factory" list="fac-list-import" style="width:110px;padding:3px 5px;font-size:0.8rem;" value="' + (r.facNameDisplay && r.facNameDisplay !== '-' ? r.facNameDisplay.replace(' (غير موجود)', '') : '') + '"><datalist id="fac-list-import">' + facOptions + '</datalist></td>' +
+                        '<td><input data-field="natid" style="width:110px;padding:3px 5px;font-size:0.8rem;" value="' + (r.nationalId || '') + '"></td>' +
+                        '<td><select data-field="status" style="padding:3px 5px;font-size:0.8rem;"><option value="Active" ' + (r.status === 'Active' ? 'selected' : '') + '>نشط</option><option value="Left" ' + (r.status === 'Left' ? 'selected' : '') + '>مستقيل</option><option value="Terminated" ' + (r.status === 'Terminated' ? 'selected' : '') + '>منهي</option></select></td>' +
+                        '<td>' + (isErr
+                            ? '<div style="min-width:220px;">' + errDetails + '</div>'
+                            : '<span class="badge badge-success" style="font-size:0.78rem;">✅ صحيح</span>') + '</td>' +
+                    '</tr>';
                 }).join('');
 
-                previewTableHtml = `
-                    <table style="width:100%; font-size:0.85rem;">
-                        <thead>
-                            <tr>
-                                <th>الصف</th>
-                                <th>الكود</th>
-                                <th>الاسم</th>
-                                <th>الهاتف</th>
-                                <th>المسمى الوظيفي</th>
-                                <th>المصنع</th>
-                                <th>السكن</th>
-                                <th>حالة الصف</th>
-                            </tr>
-                        </thead>
-                        <tbody>${sampleRows}</tbody>
-                    </table>
-                `;
+                previewTableHtml = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;">' +
+                    '<thead><tr style="background:var(--surface);">' +
+                    '<th style="white-space:nowrap;">الصف</th><th>الكود</th><th>الاسم *</th><th>الهاتف *</th>' +
+                    '<th>المسمى *</th><th>المصنع</th><th>الرقم القومي</th><th>الحالة</th><th>التحقق</th>' +
+                    '</tr></thead>' +
+                    '<tbody id="import-preview-tbody">' + rowsHtml + '</tbody></table>';
+
             } else if (type === 'factories') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const rowsHtml = allRows.map(r => {
                     const isErr = r.errors.length > 0;
-                    return `
-                        <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
-                            <td>#${r.rowNum}</td>
-                            <td><strong>${r.code}</strong></td>
-                            <td>${r.name}</td>
-                            <td>${r.address || '-'}</td>
-                            <td>${r.phone || '-'}</td>
-                            <td>${isErr ? `<span class="badge badge-danger">${r.errors.join('، ')}</span>` : '<span class="badge badge-success">جاهز للحفظ ✔️</span>'}</td>
-                        </tr>
-                    `;
+                    const errDetails = isErr ? r.errors.map(e => {
+                        const errType = typeof e === 'object' ? e : { col: '?', val: '?', type: '?', reason: e };
+                        return '<div style="font-size:0.78rem;color:var(--danger);">🔴 <strong>' + errType.col + '</strong>: ' + errType.reason + '</div>';
+                    }).join('') : '';
+                    return '<tr data-rownum="' + r.rowNum + '" style="' + (isErr ? 'background:rgba(239,68,68,0.06);' : '') + '">' +
+                        '<td><strong>#' + r.rowNum + '</strong></td>' +
+                        '<td><input data-field="code" style="width:90px;padding:3px 5px;font-size:0.8rem;" value="' + (r.code || '') + '"></td>' +
+                        '<td><input data-field="name" style="width:140px;padding:3px 5px;font-size:0.8rem;' + (!r.name ? 'border-color:var(--danger);' : '') + '" value="' + (r.name || '') + '"></td>' +
+                        '<td><input data-field="address" style="width:130px;padding:3px 5px;font-size:0.8rem;" value="' + (r.address || '') + '"></td>' +
+                        '<td><input data-field="phone" style="width:110px;padding:3px 5px;font-size:0.8rem;" value="' + (r.phone || '') + '"></td>' +
+                        '<td>' + (isErr ? errDetails : '<span class="badge badge-success">✅ صحيح</span>') + '</td>' +
+                    '</tr>';
                 }).join('');
+                previewTableHtml = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="background:var(--surface);"><th>الصف</th><th>الكود</th><th>الاسم *</th><th>العنوان</th><th>الهاتف</th><th>التحقق</th></tr></thead><tbody id="import-preview-tbody">' + rowsHtml + '</tbody></table>';
 
-                previewTableHtml = `
-                    <table style="width:100%; font-size:0.85rem;">
-                        <thead>
-                            <tr>
-                                <th>الصف</th>
-                                <th>الكود</th>
-                                <th>اسم المصنع</th>
-                                <th>العنوان</th>
-                                <th>الهاتف</th>
-                                <th>حالة الصف</th>
-                            </tr>
-                        </thead>
-                        <tbody>${sampleRows}</tbody>
-                    </table>
-                `;
             } else if (type === 'supervisors') {
-                const sampleRows = [...validRows, ...invalidRows].slice(0, 15).map(r => {
+                const rowsHtml = allRows.map(r => {
                     const isErr = r.errors.length > 0;
-                    return `
-                        <tr style="${isErr ? 'background:rgba(239, 68, 68, 0.08);' : ''}">
-                            <td>#${r.rowNum}</td>
-                            <td><strong>${r.code}</strong></td>
-                            <td>${r.name}</td>
-                            <td><strong>${r.jobTitle || 'إداري'}</strong></td>
-                            <td>${r.mobile}</td>
-                            <td>${r.facNamesDisplay}</td>
-                            <td>${isErr ? `<span class="badge badge-danger">${r.errors.join('، ')}</span>` : '<span class="badge badge-success">جاهز للحفظ ✔️</span>'}</td>
-                        </tr>
-                    `;
+                    const errDetails = isErr ? r.errors.map(e => {
+                        const errType = typeof e === 'object' ? e : { col: '?', val: '?', type: '?', reason: e };
+                        return '<div style="font-size:0.78rem;color:var(--danger);">🔴 <strong>' + errType.col + '</strong>: ' + errType.reason + '</div>';
+                    }).join('') : '';
+                    return '<tr data-rownum="' + r.rowNum + '" style="' + (isErr ? 'background:rgba(239,68,68,0.06);' : '') + '">' +
+                        '<td><strong>#' + r.rowNum + '</strong></td>' +
+                        '<td><input data-field="code" style="width:90px;padding:3px 5px;font-size:0.8rem;" value="' + (r.code || '') + '"></td>' +
+                        '<td><input data-field="name" style="width:130px;padding:3px 5px;font-size:0.8rem;" value="' + (r.name || '') + '"></td>' +
+                        '<td><input data-field="jobtitle" style="width:110px;padding:3px 5px;font-size:0.8rem;" value="' + (r.jobTitle || '') + '"></td>' +
+                        '<td><input data-field="mobile" style="width:110px;padding:3px 5px;font-size:0.8rem;" value="' + (r.mobile || '') + '"></td>' +
+                        '<td>' + (isErr ? errDetails : '<span class="badge badge-success">✅ صحيح</span>') + '</td>' +
+                    '</tr>';
                 }).join('');
-
-                previewTableHtml = `
-                    <table style="width:100%; font-size:0.85rem;">
-                        <thead>
-                            <tr>
-                                <th>الصف</th>
-                                <th>الكود</th>
-                                <th>اسم الإداري</th>
-                                <th>المسمى الوظيفي</th>
-                                <th>رقم موبيل العمل</th>
-                                <th>المصانع التابعة</th>
-                                <th>حالة الصف</th>
-                            </tr>
-                        </thead>
-                        <tbody>${sampleRows}</tbody>
-                    </table>
-                `;
+                previewTableHtml = '<table style="width:100%;font-size:0.82rem;border-collapse:collapse;"><thead><tr style="background:var(--surface);"><th>الصف</th><th>الكود</th><th>الاسم *</th><th>المسمى</th><th>الموبايل *</th><th>التحقق</th></tr></thead><tbody id="import-preview-tbody">' + rowsHtml + '</tbody></table>';
             }
+
+            // ─── ملخص الاستيراد ──────────────────────────────
+            const summaryHtml = !hasErrors ? `
+                <div style="background:rgba(34,197,94,0.1);border:1px solid var(--secondary);border-radius:8px;padding:14px;margin-bottom:14px;">
+                    <div style="font-size:1rem;font-weight:bold;color:var(--secondary);margin-bottom:8px;">✅ جميع البيانات صحيحة — جاهزة للاستيراد</div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.9rem;">
+                        <span>📋 إجمالي الصفوف: <strong>${totalRows}</strong></span>
+                        <span style="color:var(--secondary);">✅ صحيحة: <strong>${validRows.length}</strong></span>
+                        <span style="color:var(--danger);">❌ أخطاء: <strong>0</strong></span>
+                        <span>➕ عمال جدد سيتم إضافتهم: <strong>${validRows.length}</strong></span>
+                    </div>
+                </div>
+            ` : `
+                <div style="background:rgba(239,68,68,0.08);border:1px solid var(--danger);border-radius:8px;padding:14px;margin-bottom:14px;">
+                    <div style="font-size:1rem;font-weight:bold;color:var(--danger);margin-bottom:8px;">⚠️ يوجد أخطاء — عدّل البيانات في الجدول ثم اضغط إعادة التحقق</div>
+                    <div style="display:flex;gap:16px;flex-wrap:wrap;font-size:0.9rem;">
+                        <span>📋 إجمالي: <strong>${totalRows}</strong></span>
+                        <span style="color:var(--secondary);">✅ صحيح: <strong>${validRows.length}</strong></span>
+                        <span style="color:var(--danger);">❌ أخطاء: <strong>${invalidRows.length}</strong></span>
+                    </div>
+                </div>
+            `;
 
             openModal(`
                 <div class="modal-header">
-                    <h3>📥 معاينة استيراد ملف الإكسيل (${typeArabic})</h3>
+                    <h3>📥 استيراد ${typeArabic} — معاينة وتعديل</h3>
                     <button class="modal-close" onclick="cancelImportProcess()">×</button>
                 </div>
-                <div style="background:var(--bg); border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:15px;">
-                    <div>📄 اسم الملف: <strong>${filename}</strong></div>
-                    <div style="display:flex; gap:15px; margin-top:8px; flex-wrap:wrap;">
-                        <span class="badge badge-primary">إجمالي الصفوف: ${totalRows}</span>
-                        <span class="badge badge-success">جاهزة للاستيراد: ${validRows.length}</span>
-                        ${invalidRows.length > 0 ? `<span class="badge badge-danger">تحتوي أخطاء: ${invalidRows.length} (لن يتم استيرادها)</span>` : ''}
-                    </div>
+                <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:0.87rem;">
+                    📄 <strong>${filename}</strong>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <span class="badge badge-primary">إجمالي: ${totalRows}</span>
+                    <span class="badge badge-success" style="margin-right:4px;">✅ ${validRows.length}</span>
+                    ${hasErrors ? '<span class="badge badge-danger" style="margin-right:4px;">❌ ' + invalidRows.length + '</span>' : ''}
                 </div>
 
-                ${invalidRows.length > 0 ? `
-                    <div class="alert alert-warning" style="font-size:0.9rem; padding:10px 14px;">
-                        ⚠️ تنبيه: هناك <strong>${invalidRows.length}</strong> صف غير مكتمل (مثل نقص الاسم، رقم الهاتف، أو المسمى الوظيفي الإجباري). سيتم استيراد الصفوف السليمة فقط وتجاهل الصفوف التي بها أخطاء.
-                    </div>
-                ` : ''}
+                ${summaryHtml}
 
-                <div style="margin-bottom:10px; font-weight:bold; color:var(--text-secondary); font-size:0.9rem;">
-                    معاينة عينة من البيانات المقروءة من الملف:
+                <div style="font-size:0.85rem;color:var(--text-secondary);margin-bottom:8px;">
+                    💡 يمكنك تعديل البيانات مباشرة في الخانات بالجدول أدناه، ثم اضغط <strong>إعادة التحقق</strong>.
                 </div>
-                <div class="table-responsive" style="max-height:260px; overflow-y:auto; margin-bottom:20px;">
+
+                <div class="table-responsive" style="max-height:320px;overflow:auto;margin-bottom:14px;border:1px solid var(--border);border-radius:8px;">
                     ${previewTableHtml}
                 </div>
 
-                <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                    <button class="btn btn-danger" onclick="cancelImportProcess()" style="font-weight:bold;">
-                        ↩️ إلغاء العملية والرجوع
-                    </button>
-                    <div style="display:flex; gap:8px;">
-                        <button class="btn" onclick="cancelImportProcess()">${t('cancel')}</button>
-                        <button class="btn btn-primary" onclick="confirmImportExecution()" ${validRows.length === 0 ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''}>
-                            ✅ تأكيد واستيراد (${validRows.length}) سجل
+                <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+                    <button class="btn btn-danger" onclick="cancelImportProcess()">↩️ إلغاء</button>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                        <button class="btn" onclick="revalidateImportRows()" style="font-weight:bold;">
+                            🔄 إعادة التحقق من البيانات
+                        </button>
+                        <button class="btn btn-primary" onclick="confirmImportExecution()"
+                            ${hasErrors ? 'disabled style="opacity:0.45;cursor:not-allowed;" title="أصلح الأخطاء أولاً"' : 'style="font-weight:bold;"'}>
+                            ✅ تأكيد الاستيراد (${validRows.length} سجل)
                         </button>
                     </div>
                 </div>
@@ -2926,6 +3016,8 @@
             currentImportState = null;
             closeModal();
         }
+
+
 
         function confirmImportExecution() {
             if (!currentImportState) return;
@@ -2939,11 +3031,14 @@
 
             if (type === 'workers') {
                 const workers = DB.get('Workers');
+                // حساب أعلى ID موجود مرة واحدة فقط لتفادي تكرار الـ IDs
+                let maxId = workers.length ? Math.max(...workers.map(w => Number(w.id) || 0)) : 0;
+                const newWorkers = [];
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Workers');
-                    const finalCode = r.isAutoCode ? `WRK-${newId}` : r.code;
-                    workers.push({
-                        id: newId,
+                    maxId++;
+                    const finalCode = r.isAutoCode ? ('WRK-' + maxId) : r.code;
+                    const newW = {
+                        id: maxId,
                         code: finalCode,
                         name: r.name,
                         mobile: r.mobile,
@@ -2955,23 +3050,25 @@
                         startDate: r.startDate,
                         status: r.status,
                         notes: r.notes || ''
-                    });
+                    };
+                    workers.push(newW);
+                    newWorkers.push(newW);
                 });
                 DB.set('Workers', workers);
-                const createdIds = workers.slice(-validRows.length).map(w => w.id);
-                const createdRecords = workers.slice(-validRows.length);
-                logAudit('Workers', 'IMPORT_EXCEL', validRows.length, null, { importedIds: createdIds, importedRecords: createdRecords }, `استيراد ${validRows.length} عامل من ملف إكسيل`);
-                alert(`🎉 تم بنجاح استيراد ${validRows.length} عامل إلى النظام وحفظهم بدقة!`);
+                logAudit('Workers', 'IMPORT_EXCEL', validRows.length, null, { importedIds: newWorkers.map(w => w.id) }, 'استيراد ' + validRows.length + ' عامل من ملف إكسيل');
+                alert('🎉 تم بنجاح استيراد ' + validRows.length + ' عامل إلى النظام وحفظهم بدقة!');
                 cancelImportProcess();
                 navigate('workers');
 
             } else if (type === 'factories') {
                 const factories = DB.get('Factories');
+                let maxId = factories.length ? Math.max(...factories.map(f => Number(f.id) || 0)) : 0;
+                const newFacs = [];
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Factories');
-                    const finalCode = r.isAutoCode ? `FAC-${newId}` : r.code;
-                    factories.push({
-                        id: newId,
+                    maxId++;
+                    const finalCode = r.isAutoCode ? ('FAC-' + maxId) : r.code;
+                    const newF = {
+                        id: maxId,
                         code: finalCode,
                         name: r.name,
                         address: r.address || '',
@@ -2979,23 +3076,25 @@
                         responsible: r.responsible || '',
                         status: r.status,
                         notes: r.notes || ''
-                    });
+                    };
+                    factories.push(newF);
+                    newFacs.push(newF);
                 });
                 DB.set('Factories', factories);
-                const createdIds = factories.slice(-validRows.length).map(f => f.id);
-                const createdRecords = factories.slice(-validRows.length);
-                logAudit('Factories', 'IMPORT_EXCEL', validRows.length, null, { importedIds: createdIds, importedRecords: createdRecords }, `استيراد ${validRows.length} مصنع من ملف إكسيل`);
-                alert(`🎉 تم بنجاح استيراد ${validRows.length} مصنع إلى النظام وحفظهم بدقة!`);
+                logAudit('Factories', 'IMPORT_EXCEL', validRows.length, null, { importedIds: newFacs.map(f => f.id) }, 'استيراد ' + validRows.length + ' مصنع من ملف إكسيل');
+                alert('🎉 تم بنجاح استيراد ' + validRows.length + ' مصنع إلى النظام وحفظهم بدقة!');
                 cancelImportProcess();
                 navigate('factories');
 
             } else if (type === 'supervisors') {
                 const supervisors = DB.get('Supervisors');
+                let maxId = supervisors.length ? Math.max(...supervisors.map(s => Number(s.id) || 0)) : 0;
+                const newSups = [];
                 validRows.forEach(r => {
-                    const newId = DB.nextId('Supervisors');
-                    const finalCode = r.isAutoCode ? `ADM-${newId}` : r.code;
-                    supervisors.push({
-                        id: newId,
+                    maxId++;
+                    const finalCode = r.isAutoCode ? ('ADM-' + maxId) : r.code;
+                    const newS = {
+                        id: maxId,
                         code: finalCode,
                         name: r.name,
                         jobTitle: r.jobTitle || 'إداري',
@@ -3004,17 +3103,100 @@
                         factoryIds: r.factoryIds || [],
                         status: r.status,
                         notes: r.notes || ''
-                    });
+                    };
+                    supervisors.push(newS);
+                    newSups.push(newS);
                 });
                 DB.set('Supervisors', supervisors);
-                const createdIds = supervisors.slice(-validRows.length).map(s => s.id);
-                const createdRecords = supervisors.slice(-validRows.length);
-                logAudit('Supervisors', 'IMPORT_EXCEL', validRows.length, null, { importedIds: createdIds, importedRecords: createdRecords }, `استيراد ${validRows.length} مشرف من ملف إكسيل`);
-                alert(`🎉 تم بنجاح استيراد ${validRows.length} إداري إلى النظام وحفظهم بدقة!`);
+                logAudit('Supervisors', 'IMPORT_EXCEL', validRows.length, null, { importedIds: newSups.map(s => s.id) }, 'استيراد ' + validRows.length + ' إداري من ملف إكسيل');
+                alert('🎉 تم بنجاح استيراد ' + validRows.length + ' إداري إلى النظام وحفظهم بدقة!');
                 cancelImportProcess();
                 navigate('supervisors');
             }
         }
+
+        // ── قراءة بيانات الصف المعدّل من الجدول التفاعلي ──────────────────────
+        function revalidateImportRows() {
+            if (!currentImportState) return;
+            const { type } = currentImportState;
+            const factories = DB.get('Factories');
+            const existingWorkers = DB.get('Workers');
+            const existingSupervisors = DB.get('Supervisors');
+            const existingFactories = DB.get('Factories');
+            const housing = DB.get('Housing');
+
+            const tbody = document.getElementById('import-preview-tbody');
+            if (!tbody) return;
+
+            const trs = tbody.querySelectorAll('tr[data-rownum]');
+            const allRecords = [];
+            const codesSeenInFile = {};
+
+            trs.forEach(tr => {
+                const rowNum = Number(tr.getAttribute('data-rownum'));
+                const inputs = tr.querySelectorAll('input, select');
+                const getField = id => {
+                    const el = tr.querySelector('[data-field="' + id + '"]');
+                    return el ? el.value.trim() : '';
+                };
+
+                let record = { rowNum, errors: [] };
+                if (type === 'workers') {
+                    record.code     = getField('code');
+                    record.name     = getField('name');
+                    record.mobile   = getField('mobile');
+                    record.nationalId = getField('natid');
+                    record.jobTitle = getField('jobtitle');
+                    record.startDate = getField('startdate') || new Date().toISOString().split('T')[0];
+                    record.status   = getField('status') || 'Active';
+                    record.notes    = getField('notes');
+                    record.isAutoCode = !record.code;
+
+                    // المصنع
+                    const facInput = getField('factory');
+                    const foundFac = factories.find(f =>
+                        (f.code && f.code.toLowerCase() === facInput.toLowerCase()) ||
+                        (f.name && f.name.toLowerCase() === facInput.toLowerCase()) ||
+                        String(f.id) === facInput
+                    );
+                    record.factoryId = foundFac ? foundFac.id : null;
+                    record.facNameDisplay = foundFac ? foundFac.name : (facInput ? facInput + ' (غير موجود)' : '-');
+
+                    // السكن
+                    const houseInput = getField('housing');
+                    const foundHouse = houseInput ? housing.find(h =>
+                        (h.name && h.name.toLowerCase().includes(houseInput.toLowerCase())) ||
+                        (h.number && String(h.number) === houseInput) ||
+                        String(h.id) === houseInput
+                    ) : null;
+                    record.buildingId = foundHouse ? foundHouse.id : '';
+                    record.bNameDisplay = foundHouse ? (foundHouse.name || 'عمارة ' + foundHouse.number) : (houseInput || '-');
+
+                    // التحقق
+                    if (!record.name) record.errors.push({ col: 'اسم العامل', val: record.name, type: 'فارغ', reason: 'اسم العامل مطلوب' });
+                    if (!record.mobile) record.errors.push({ col: 'رقم الهاتف', val: record.mobile, type: 'فارغ', reason: 'رقم الهاتف مطلوب' });
+                    if (!record.jobTitle) record.errors.push({ col: 'المسمى الوظيفي', val: record.jobTitle, type: 'فارغ', reason: 'المسمى الوظيفي إجباري' });
+                    if (record.code) {
+                        if (existingWorkers.some(w => String(w.code).toLowerCase() === record.code.toLowerCase()))
+                            record.errors.push({ col: 'كود العامل', val: record.code, type: 'مكرر', reason: 'الكود موجود مسبقاً في النظام' });
+                        if (codesSeenInFile[record.code.toLowerCase()])
+                            record.errors.push({ col: 'كود العامل', val: record.code, type: 'مكرر', reason: 'الكود مكرر داخل الملف نفسه' });
+                        codesSeenInFile[record.code.toLowerCase()] = true;
+                    }
+                    if (record.nationalId && record.nationalId.length > 0 && record.nationalId.length !== 14)
+                        record.errors.push({ col: 'الرقم القومي', val: record.nationalId, type: 'خطأ في التنسيق', reason: 'يجب أن يكون 14 رقماً بالضبط' });
+                    const validStatuses = ['Active', 'Left', 'Terminated'];
+                    if (record.status && !validStatuses.includes(record.status))
+                        record.errors.push({ col: 'الحالة', val: record.status, type: 'قيمة غير صحيحة', reason: 'يجب أن تكون: Active أو Left أو Terminated' });
+                }
+                allRecords.push(record);
+            });
+
+            currentImportState.validRows = allRecords.filter(r => r.errors.length === 0);
+            currentImportState.invalidRows = allRecords.filter(r => r.errors.length > 0);
+            showImportPreviewModal();
+        }
+
 
         // 7.4.1 SUPERVISORS VIEW & MANAGEMENT
         // ==========================================
@@ -4594,9 +4776,10 @@
                     </div>
 
                     <!-- Tabs -->
-                    <div style="display:flex; gap:10px; border-bottom:2px solid var(--border); margin-bottom:20px;">
+                    <div style="display:flex; gap:10px; border-bottom:2px solid var(--border); margin-bottom:20px; flex-wrap:wrap;">
                         <button class="btn ${_currentSettingsTab==='company'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('company')">🏢 ${t('company_settings_tab')}</button>
                         <button class="btn ${_currentSettingsTab==='display'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('display')">🎨 ${t('display_settings_tab')}</button>
+                        <button class="btn ${_currentSettingsTab==='account'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('account')">👤 حسابي والأمان</button>
                     </div>
 
                     <!-- Tab 1: Company Settings -->
@@ -4710,8 +4893,80 @@
 
                         <button class="btn btn-primary" style="width:100%; justify-content:center; padding:11px; font-size:1.05rem;" onclick="saveDisplaySettings()">${t('save_display')}</button>
                     </div>
+
+                    <!-- Tab 3: Account & Security -->
+                    <div id="tab-account-settings" style="display:${_currentSettingsTab==='account'?'block':'none'};">
+                        ${renderAccountTabHtml()}
+                    </div>
+
                 </div>
             `;
+        }
+
+        function renderAccountTabHtml() {
+            const fbUser = firebase.auth().currentUser;
+            const profileRaw = DB.getOne('profile') || {};
+            const username = DB.getCurrentUsername() || '';
+            const fullName = fbUser ? (fbUser.displayName || profileRaw.fullName || '') : (profileRaw.fullName || '');
+            const email = fbUser ? fbUser.email : (profileRaw.email || '');
+            const mobile = profileRaw.mobile || '';
+
+            return `
+                <div id="account-alert-msg"></div>
+                <!-- بيانات الحساب -->
+                <div style="background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:18px; margin-bottom:18px;">
+                    <h4 style="color:var(--primary); margin-bottom:14px; display:flex; align-items:center; gap:8px;">👤 بيانات حسابي</h4>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>اسم المستخدم</label>
+                            <input type="text" id="acc-username" value="${username}" readonly style="opacity:0.7; cursor:not-allowed;">
+                        </div>
+                        <div class="form-group">
+                            <label>البريد الإلكتروني</label>
+                            <input type="email" id="acc-email" value="${email}" readonly style="opacity:0.7; cursor:not-allowed;">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الاسم الكامل *</label>
+                            <input type="text" id="acc-fullname" value="${fullName}" placeholder="الاسم الكامل">
+                        </div>
+                        <div class="form-group">
+                            <label>رقم الموبايل *</label>
+                            <input type="tel" id="acc-mobile" value="${mobile}" placeholder="01xxxxxxxxx">
+                        </div>
+                    </div>
+                    <button class="btn btn-success" style="width:100%; justify-content:center; padding:10px;" onclick="saveUserProfile()">💾 حفظ بيانات الحساب</button>
+                </div>
+
+                <!-- تغيير كلمة المرور عبر SMS -->
+                <div style="background:var(--bg); border:2px solid var(--primary); border-radius:var(--radius); padding:18px;">
+                    <h4 style="color:var(--primary); margin-bottom:6px; display:flex; align-items:center; gap:8px;">🔑 تغيير كلمة المرور</h4>
+                    <p style="font-size:0.88rem; color:var(--text-secondary); margin-bottom:14px;">سيتم إرسال كود تأكيد على رقم موبايلك المسجل (${mobile ? '0' + mobile.replace(/^\+20/, '') : 'غير مسجل بعد'}) للتحقق من هويتك قبل تغيير كلمة المرور.</p>
+                    <div id="chpass-alert-msg"></div>
+                    <div id="chpass-step1">
+                        <button class="btn btn-primary" style="width:100%; justify-content:center; padding:10px; font-weight:bold;" onclick="sendChangePasswordOtp()">📲 إرسال كود التحقق على الموبايل</button>
+                    </div>
+                    <div id="chpass-step2" style="display:none;">
+                        <div style="background:var(--surface); padding:14px; border-radius:8px; border:2px dashed var(--primary); text-align:center; margin-bottom:14px;">
+                            <p style="font-weight:bold; margin-bottom:10px; font-size:0.92rem;">📲 أدخل الكود المرسل على هاتفك:</p>
+                            <input type="text" id="chpass-otp" maxlength="6" placeholder="• • • • • •"
+                                style="text-align:center; font-size:1.4rem; letter-spacing:6px; max-width:220px; font-weight:bold; padding:8px; border:2px solid var(--primary); border-radius:8px; display:inline-block; background:var(--bg);">
+                        </div>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label>كلمة المرور الجديدة *</label>
+                                <input type="password" id="chpass-new" placeholder="6 أحرف أو أرقام على الأقل">
+                            </div>
+                            <div class="form-group">
+                                <label>تأكيد كلمة المرور *</label>
+                                <input type="password" id="chpass-confirm" placeholder="أعد كتابة كلمة المرور">
+                            </div>
+                        </div>
+                        <div id="chpass-recaptcha-container"></div>
+                        <button class="btn btn-success" style="width:100%; justify-content:center; padding:10px; font-weight:bold;" onclick="submitChangePasswordWithOtp()">✅ تأكيد الكود وتغيير كلمة المرور</button>
+                    </div>
+                </div>`;
         }
 
         function switchSettingsTab(tab) {
@@ -4865,7 +5120,16 @@
         }
 
         function openWorkerEditModal(workerId) {
-            const worker = DB.get('Workers').find(w => Number(w.id) === Number(workerId));
+            // بحث آمن بالـ ID فقط — لا نعتمد على index أو ترتيب الصفوف
+            const wid = Number(workerId);
+            const allWorkers = DB.get('Workers');
+            const worker = allWorkers.find(w => Number(w.id) === wid);
+
+            if (!worker) {
+                alert('❌ لم يتم العثور على العامل (ID: ' + wid + ').\nيرجى تحديث الصفحة والمحاولة مرة أخرى.');
+                return;
+            }
+
             const factories = DB.get('Factories');
             const housing = DB.get('Housing');
 
@@ -5372,13 +5636,15 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <div class="form-row">
                         <div class="form-group">
                             <label>عمارة السكن *</label>
-                            <select id="m-iss-building">
+                            <select id="m-iss-building" onchange="updateIssueApartmentsDropdown()">
                                 ${housing.map(h => `<option value="${h.id}" ${preTargetId&&Number(preTargetId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>رقم الشقة (اختياري / أو العمارة عامة)</label>
-                            <input type="text" id="m-iss-apt" value="${preApt || ''}" placeholder="مثال: شقة 10">
+                            <label>رقم الشقة</label>
+                            <select id="m-iss-apt">
+                                <option value="">-- العمارة بالكامل (بدون تحديد شقة) --</option>
+                            </select>
                         </div>
                     </div>
                     <div class="form-group">
@@ -5420,7 +5686,28 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     <button class="btn btn-success" onclick="submitModalIssue(${preWhId})">💾 تأكيد الصرف</button>
                 </div>
             `);
+            updateIssueApartmentsDropdown(preApt);
             refreshModalIssueStock();
+        }
+
+        function updateIssueApartmentsDropdown(selectedApt = null) {
+            const buildingSelect = document.getElementById('m-iss-building');
+            const aptSelect = document.getElementById('m-iss-apt');
+            if (!buildingSelect || !aptSelect) return;
+
+            const buildingId = Number(buildingSelect.value);
+            const housing = DB.get('Housing');
+            const building = housing.find(b => Number(b.id) === buildingId);
+            const apts = building ? (building.apartments || []) : [];
+
+            let html = '<option value="">-- العمارة بالكامل (بدون تحديد شقة) --</option>';
+            apts.forEach(apt => {
+                const aptNum = typeof apt === 'object' && apt !== null ? apt.number : apt;
+                const aptFloor = typeof apt === 'object' && apt !== null && apt.floor ? ` (الدور ${apt.floor})` : '';
+                const isSelected = selectedApt && String(selectedApt) === String(aptNum) ? 'selected' : '';
+                html += `<option value="${aptNum}" ${isSelected}>شقة ${aptNum}${aptFloor}</option>`;
+            });
+            aptSelect.innerHTML = html;
         }
 
         function toggleIssueTargetFields() {
