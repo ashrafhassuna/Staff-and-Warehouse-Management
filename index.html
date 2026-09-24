@@ -2337,13 +2337,7 @@
             const factories = DB.get('Factories');
             const housing = DB.get('Housing');
 
-            let filtered = workers;
-            if (initialFilter === 'Active') filtered = workers.filter(w => w.status === 'Active');
-            if (initialFilter === 'Left') filtered = workers.filter(w => w.status === 'Left' || w.status === 'Terminated');
-            if (initialFilter === 'unsettled') filtered = workers.filter(w => getWorkerTotalUnsettled(w.id) > 0);
-            if (initialFilter === 'left_unsettled') filtered = workers.filter(w => (w.status === 'Left' || w.status === 'Terminated') && getWorkerTotalUnsettled(w.id) > 0);
-
-            let rows = filtered.map(w => {
+            let rows = workers.map(w => {
                 const fac = factories.find(f => Number(f.id) === Number(w.factoryId));
                 const unsettled = getWorkerTotalUnsettled(w.id);
                 const custodySummary = getWorkerCustodySummaryString(w.id);
@@ -2362,7 +2356,7 @@
                 }
                 
                 return `
-                    <tr style="${(w.status==='Left'||w.status==='Terminated') && unsettled>0 ? 'background:rgba(239, 68, 68, 0.07);' : ''}">
+                    <tr data-worker-id="${w.id}" data-factory-id="${w.factoryId || ''}" data-status="${w.status || ''}" data-unsettled="${unsettled > 0}" data-start-date="${w.startDate || ''}" style="${(w.status==='Left'||w.status==='Terminated') && unsettled>0 ? 'background:rgba(239, 68, 68, 0.07);' : ''}">
                         <td><strong>${w.code}</strong></td>
                         <td><strong>${w.name}</strong></td>
                         <td>${w.mobile}</td>
@@ -2392,25 +2386,70 @@
             }).join('');
 
             return `
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
-                    <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                        <button class="btn btn-primary" onclick="openWorkerAddModal()">${t('add_worker')}</button>
-                        <select id="worker-status-filter" onchange="applyWorkerFilter(this.value)" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); font-weight:bold;">
-                            <option value="all" ${initialFilter==='all'?'selected':''}>${t('filter_all')} (${workers.length})</option>
-                            <option value="Active" ${initialFilter==='Active'?'selected':''}>${t('filter_active')} (${workers.filter(w=>w.status==='Active').length})</option>
-                            <option value="Left" ${initialFilter==='Left'?'selected':''}>${t('filter_left')} (${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length})</option>
-                            <option value="unsettled" ${initialFilter==='unsettled'?'selected':''}>${t('filter_unsettled')} (${workers.filter(w=>getWorkerTotalUnsettled(w.id)>0).length})</option>
-                            <option value="left_unsettled" ${initialFilter==='left_unsettled'?'selected':''}>${t('filter_left_unsettled')} (${workers.filter(w=>(w.status==='Left'||w.status==='Terminated')&&getWorkerTotalUnsettled(w.id)>0).length})</option>
-                        </select>
-                        <input type="text" id="worker-search" placeholder="${t('search')}" onkeyup="filterWorkersTableLive()" style="padding:8px 12px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); min-width:200px;">
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+                        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                            <button class="btn btn-primary" onclick="openWorkerAddModal()">${t('add_worker')}</button>
+                            <span class="badge badge-primary" style="font-size:0.9rem; padding:6px 12px;">
+                                👥 العمال الظاهرون: <strong id="worker-count-display">${workers.length}</strong> / ${workers.length}
+                            </span>
+                        </div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                            <button class="btn btn-success" onclick="exportWorkersExcel()">${t('export_data')}</button>
+                            <button class="btn" onclick="downloadWorkersTemplateExcel()">${t('download_template')}</button>
+                            <label class="btn" style="cursor:pointer;">${t('import_data')} <input type="file" accept=".xlsx, .xls" style="display:none;" onchange="handleExcelImportFile(this, 'workers')"></label>
+                            <button class="btn" onclick="printReport('${t('workers')}')">${t('print_workers')}</button>
+                        </div>
                     </div>
-                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-                        <button class="btn btn-success" onclick="exportWorkersExcel()">${t('export_data')}</button>
-                        <button class="btn" onclick="downloadWorkersTemplateExcel()">${t('download_template')}</button>
-                        <label class="btn" style="cursor:pointer;">${t('import_data')} <input type="file" accept=".xlsx, .xls" style="display:none;" onchange="handleExcelImportFile(this, 'workers')"></label>
-                        <button class="btn" onclick="printReport('${t('workers')}')">${t('print_workers')}</button>
+
+                    <!-- Workers Filter Panel -->
+                    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap:10px; align-items:end; background:var(--bg); padding:12px; border-radius:8px; border:1px solid var(--border);">
+                        <!-- Factory Filter -->
+                        <div>
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">🏢 المصنع:</label>
+                            <select id="worker-factory-filter" onchange="filterWorkersTableLive()" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:bold;">
+                                <option value="all">🏢 كل المصانع</option>
+                                ${factories.map(f => `<option value="${f.id}">🏭 ${f.name}</option>`).join('')}
+                            </select>
+                        </div>
+
+                        <!-- Status Filter -->
+                        <div>
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">👥 حالة العامل:</label>
+                            <select id="worker-status-filter" onchange="filterWorkersTableLive()" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:bold;">
+                                <option value="all" ${initialFilter==='all'?'selected':''}>👥 كل الحالات (${workers.length})</option>
+                                <option value="Active" ${initialFilter==='Active'?'selected':''}>🟢 ما زال يعمل (${workers.filter(w=>w.status==='Active').length})</option>
+                                <option value="Left" ${initialFilter==='Left'?'selected':''}>🔴 مستقيل / مغادر (${workers.filter(w=>w.status==='Left'||w.status==='Terminated').length})</option>
+                                <option value="unsettled" ${initialFilter==='unsettled'?'selected':''}>⚠️ عمال بعهد معلقة (${workers.filter(w=>getWorkerTotalUnsettled(w.id)>0).length})</option>
+                                <option value="left_unsettled" ${initialFilter==='left_unsettled'?'selected':''}>🚨 مستقيل بعهد معلقة (${workers.filter(w=>(w.status==='Left'||w.status==='Terminated')&&getWorkerTotalUnsettled(w.id)>0).length})</option>
+                            </select>
+                        </div>
+
+                        <!-- Hire Date From -->
+                        <div>
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">📅 تاريخ التعيين (من):</label>
+                            <input type="date" id="worker-date-from" onchange="filterWorkersTableLive()" style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
+                        </div>
+
+                        <!-- Hire Date To -->
+                        <div>
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">📅 تاريخ التعيين (إلى):</label>
+                            <input type="date" id="worker-date-to" onchange="filterWorkersTableLive()" style="width:100%; padding:6px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
+                        </div>
+
+                        <!-- Live Search Input -->
+                        <div style="grid-column: span 2;">
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">🔍 بحث حي:</label>
+                            <input type="text" id="worker-search" placeholder="بحث بالاسم / الكود / الهاتف / القومي..." onkeyup="filterWorkersTableLive()" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text);">
+                        </div>
+
+                        <!-- Reset Button -->
+                        <div>
+                            <button class="btn btn-sm" onclick="resetWorkerFilters()" style="width:100%; justify-content:center; padding:8px 10px; font-size:0.85rem; height:36px;" title="تفريغ كل الفلاتر">🔄 تفريغ الفلاتر</button>
+                        </div>
                     </div>
                 </div>
+
                 <div class="table-responsive">
                     <table id="workers-table">
                         <thead>
@@ -2429,47 +2468,93 @@
                                 <th>${t('actions')}</th>
                             </tr>
                         </thead>
-                        <tbody>${rows || `<tr><td colspan="11" style="text-align:center">${t('no_workers_match')}</td></tr>`}</tbody>
+                        <tbody>${rows || `<tr><td colspan="12" style="text-align:center">${t('no_workers_match')}</td></tr>`}</tbody>
                     </table>
                 </div>
+                <img src="data:image/svg+xml," onerror="filterWorkersTableLive()" style="display:none;">
             `;
         }
 
-        function applyWorkerFilter(val) { navigate('workers', { workerFilter: val }); }
+        function applyWorkerFilter(val) {
+            const statusFilter = document.getElementById('worker-status-filter');
+            if (statusFilter) {
+                statusFilter.value = val;
+                filterWorkersTableLive();
+            } else {
+                navigate('workers', { workerFilter: val });
+            }
+        }
 
         function filterWorkersTableLive() {
-            const term = document.getElementById('worker-search').value.toLowerCase();
-            const rows = document.querySelectorAll('#workers-table tbody tr');
+            const facFilter = document.getElementById('worker-factory-filter')?.value || 'all';
+            const statusFilter = document.getElementById('worker-status-filter')?.value || 'all';
+            const dateFrom = document.getElementById('worker-date-from')?.value || '';
+            const dateTo = document.getElementById('worker-date-to')?.value || '';
+            const searchTerm = document.getElementById('worker-search')?.value.toLowerCase().trim() || '';
+
+            const rows = document.querySelectorAll('#workers-table tbody tr[data-worker-id]');
+            let visibleCount = 0;
+
             rows.forEach(r => {
-                r.style.display = r.textContent.toLowerCase().includes(term) ? '' : 'none';
+                const facId = r.getAttribute('data-factory-id');
+                const status = r.getAttribute('data-status');
+                const hasUnsettled = r.getAttribute('data-unsettled') === 'true';
+                const startDate = r.getAttribute('data-start-date') || '';
+                const textContent = r.textContent.toLowerCase();
+
+                // 1. Factory Filter
+                let matchesFactory = (facFilter === 'all') || (String(facId) === String(facFilter));
+
+                // 2. Status Filter
+                let matchesStatus = true;
+                if (statusFilter === 'Active') {
+                    matchesStatus = (status === 'Active');
+                } else if (statusFilter === 'Left') {
+                    matchesStatus = (status === 'Left' || status === 'Terminated');
+                } else if (statusFilter === 'unsettled') {
+                    matchesStatus = hasUnsettled;
+                } else if (statusFilter === 'left_unsettled') {
+                    matchesStatus = (status === 'Left' || status === 'Terminated') && hasUnsettled;
+                }
+
+                // 3. Date From Filter
+                let matchesDateFrom = true;
+                if (dateFrom) {
+                    matchesDateFrom = startDate ? (startDate >= dateFrom) : false;
+                }
+
+                // 4. Date To Filter
+                let matchesDateTo = true;
+                if (dateTo) {
+                    matchesDateTo = startDate ? (startDate <= dateTo) : false;
+                }
+
+                // 5. Search Text Filter
+                let matchesSearch = !searchTerm || textContent.includes(searchTerm);
+
+                const show = matchesFactory && matchesStatus && matchesDateFrom && matchesDateTo && matchesSearch;
+                r.style.display = show ? '' : 'none';
+                if (show) visibleCount++;
             });
+
+            const countEl = document.getElementById('worker-count-display');
+            if (countEl) countEl.textContent = visibleCount;
         }
 
-        
-        // ==========================================
-        // ── EXCEL (XLSX) IMPORT / EXPORT & PREVIEW ENGINE ──
-        // ==========================================
+        function resetWorkerFilters() {
+            const facFilter = document.getElementById('worker-factory-filter');
+            const statusFilter = document.getElementById('worker-status-filter');
+            const dateFrom = document.getElementById('worker-date-from');
+            const dateTo = document.getElementById('worker-date-to');
+            const searchInput = document.getElementById('worker-search');
 
-        let currentImportState = null; // { type, validRows: [], invalidRows: [] }
+            if (facFilter) facFilter.value = 'all';
+            if (statusFilter) statusFilter.value = 'all';
+            if (dateFrom) dateFrom.value = '';
+            if (dateTo) dateTo.value = '';
+            if (searchInput) searchInput.value = '';
 
-        function s2ab(s) {
-            const buf = new ArrayBuffer(s.length);
-            const view = new Uint8Array(buf);
-            for (let i = 0; i < s.length; i++) view[i] = s.charCodeAt(i) & 0xFF;
-            return buf;
-        }
-
-        function downloadExcelWorkbook(wb, filename) {
-            const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'binary' });
-            const blob = new Blob([s2ab(wbout)], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
+            filterWorkersTableLive();
         }
 
         // --- Workers Excel Export & Template ---
@@ -2479,10 +2564,23 @@
             const housing = DB.get('Housing');
             if (workers.length === 0) { alert('لا يوجد عمال لتصديرهم'); return; }
 
+            // Filter target workers based on visible rows if filter panel is active
+            const visibleRows = document.querySelectorAll('#workers-table tbody tr[data-worker-id]');
+            let visibleIds = new Set();
+            visibleRows.forEach(r => {
+                if (r.style.display !== 'none') {
+                    visibleIds.add(Number(r.getAttribute('data-worker-id')));
+                }
+            });
+
+            const targetWorkers = visibleIds.size > 0 
+                ? workers.filter(w => visibleIds.has(Number(w.id)))
+                : workers;
+
             const headers = ['كود العامل', 'اسم العامل', 'رقم الهاتف', 'الرقم القومي', 'المسمى الوظيفي', 'كود المصنع', 'اسم المصنع', 'عمارة السكن', 'رقم الشقة', 'تاريخ التعيين', 'الحالة', 'ملاحظات'];
             const data = [headers];
 
-            workers.forEach(w => {
+            targetWorkers.forEach(w => {
                 const fac = factories.find(f => Number(f.id) === Number(w.factoryId));
                 const facCode = fac ? (fac.code || '') : '';
                 const facName = fac ? (fac.name || '') : '';
@@ -2511,7 +2609,7 @@
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, ws, 'Workers');
             downloadExcelWorkbook(wb, `Workers_${new Date().toISOString().split('T')[0]}.xlsx`);
-            logAudit('Workers', 'EXPORT_EXCEL', workers.length, null, null, `تصدير كشف (${workers.length}) عامل إلى ملف إكسيل`);
+            logAudit('Workers', 'EXPORT_EXCEL', targetWorkers.length, null, null, `تصدير كشف (${targetWorkers.length}) عامل إلى ملف إكسيل`);
         }
 
         function downloadWorkersTemplateExcel() {
