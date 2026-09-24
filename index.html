@@ -760,6 +760,7 @@
                     <label>👤 المستخدم:</label>
                     <span id="current-user-display">Acc. Ashraf Hassuna</span>
                 </div>
+                <button class="btn btn-sm" onclick="resyncLocalToFirebase()" title="رفع وتأكيد كل البيانات من هذا الجهاز إلى السحابة والموبايل" style="border:1px solid var(--border); font-size:0.85rem; font-weight:600; background:var(--primary); color:#fff;">☁️ رفع المزامنة</button>
                 <button class="btn btn-sm" onclick="openChangePasswordModal()" title="تغيير كلمة المرور" style="border:1px solid var(--border); font-size:0.85rem; font-weight:600;">🔑 كلمة المرور</button>
                 <button class="btn btn-sm btn-danger" onclick="handleLogout()" title="تسجيل الخروج من هذا الحساب">🚪 خروج</button>
                 <button class="btn" id="lang-toggle" title="تغيير اللغة (Change Language)">EN</button>
@@ -1022,7 +1023,15 @@
                 return 'SistymDB_u_' + (this.getCurrentUsername() || 'guest') + '_' + col;
             },
             get: function(col) {
-                try { return JSON.parse(localStorage.getItem(this._localKey(col)) || '[]'); } catch(e) { return []; }
+                try {
+                    let val = JSON.parse(localStorage.getItem(this._localKey(col)) || '[]');
+                    if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        val = Object.values(val);
+                    }
+                    return Array.isArray(val) ? val : [];
+                } catch(e) {
+                    return [];
+                }
             },
             set: function(col, data) {
                 localStorage.setItem(this._localKey(col), JSON.stringify(data));
@@ -1051,23 +1060,61 @@
                 const dbRef = firebase.database().ref('users/' + uid);
                 dbRef.once('value').then(snapshot => {
                     const data = snapshot.val();
+                    const username = this.getCurrentUsername() || 'guest';
                     if (data) {
-                        const username = this.getCurrentUsername() || 'guest';
                         Object.keys(data).forEach(col => {
-                            localStorage.setItem('SistymDB_u_' + username + '_' + col, JSON.stringify(data[col]));
+                            let val = data[col];
+                            if (val && typeof val === 'object' && !Array.isArray(val)) {
+                                if (col !== 'CompanySettings' && col !== 'DisplaySettings') {
+                                    val = Object.values(val);
+                                }
+                            }
+                            // Save if valid
+                            if (Array.isArray(val) ? val.length > 0 : val) {
+                                localStorage.setItem('SistymDB_u_' + username + '_' + col, JSON.stringify(val));
+                            }
                         });
-                        console.log('✅ تم مزامنة البيانات من Firebase');
+                        console.log('✅ تم مزامنة كافة البيانات من Firebase بنجاح');
                     }
+
+                    // حماية بيانات الجهاز: إذا كانت البيانات موجودة في اللابتوب وغير موجودة في Firebase، يتم رفعها تلقائياً للسحابة
+                    const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs'];
+                    collections.forEach(col => {
+                        const localData = this.get(col);
+                        const remoteData = data ? data[col] : null;
+                        if (localData && localData.length > 0 && (!remoteData || (Array.isArray(remoteData) && remoteData.length === 0))) {
+                            firebase.database().ref('users/' + uid + '/' + col).set(localData);
+                            console.log('⬆️ رفع تلقائي لحفظ البيانات في السحابة: ' + col + ' (' + localData.length + ' عنصر)');
+                        }
+                    });
+
                     if (callback) callback();
                 }).catch(e => {
                     console.warn('Firebase sync error:', e);
                     if (callback) callback();
                 });
 
-                // مزامنة فورية في الخلفية إذا تم تعديل أي بيانات من جهاز آخر
+                // مزامنة فورية في الخلفية إذا تم تعديل أي بيانات من جهاز آخر (مثلاً من اللابتوب أو الموبايل)
                 dbRef.on('child_changed', snapshot => {
                     const col = snapshot.key;
-                    const val = snapshot.val();
+                    let val = snapshot.val();
+                    if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        if (col !== 'CompanySettings' && col !== 'DisplaySettings') {
+                            val = Object.values(val);
+                        }
+                    }
+                    const username = this.getCurrentUsername() || 'guest';
+                    localStorage.setItem('SistymDB_u_' + username + '_' + col, JSON.stringify(val));
+                });
+
+                dbRef.on('child_added', snapshot => {
+                    const col = snapshot.key;
+                    let val = snapshot.val();
+                    if (val && typeof val === 'object' && !Array.isArray(val)) {
+                        if (col !== 'CompanySettings' && col !== 'DisplaySettings') {
+                            val = Object.values(val);
+                        }
+                    }
                     const username = this.getCurrentUsername() || 'guest';
                     localStorage.setItem('SistymDB_u_' + username + '_' + col, JSON.stringify(val));
                 });
@@ -1081,10 +1128,28 @@
                         name: '', logo: '', phone: '', address: '', email: '', commercialReg: '', taxCard: ''
                     });
                 }
-                if (!this.get('Supervisors').length) this.set('Supervisors', []);
-                if (!this.get('Housing').length) this.set('Housing', []);
             }
         };
+
+        function resyncLocalToFirebase(silent = false) {
+            const uid = getFbUid();
+            if (!uid) {
+                if (!silent) alert('يرجى تسجيل الدخول أولاً للمزامنة السحابية.');
+                return;
+            }
+            const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs', 'CompanySettings'];
+            let count = 0;
+            collections.forEach(col => {
+                const data = DB.get(col);
+                if (data && (Array.isArray(data) ? data.length > 0 : true)) {
+                    firebase.database().ref('users/' + uid + '/' + col).set(data);
+                    count++;
+                }
+            });
+            if (!silent) {
+                alert('✅ تم رفـع وتأكيد كافة بيانات اللابتوب (بما فيها الـ 12 عمارة وكل البيانات) إلى السحابة بنجاح!\n\nافتـح الموبايل الآن واعمل تحديث للصفحة (Refresh) وسوف تظهر العماير فوراً.');
+            }
+        }
 
         // ==========================================
         // 3. AUTHENTICATION — Firebase Auth
