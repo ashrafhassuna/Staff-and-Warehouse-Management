@@ -5257,7 +5257,40 @@
         }
 
         // Worker Add & Edit
-        function openWorkerAddModal(preFacId = null) {
+                function updateWorkerApartmentsDropdown(selectedApt = null) {
+            const buildingSelect = document.getElementById('w-building');
+            const aptSelect = document.getElementById('w-apartment');
+            if (!buildingSelect || !aptSelect) return;
+
+            const buildingId = Number(buildingSelect.value);
+            if (!buildingId) {
+                aptSelect.innerHTML = '<option value="">-- اختر العمارة أولاً --</option>';
+                return;
+            }
+
+            const housing = DB.get('Housing');
+            const building = housing.find(b => Number(b.id) === buildingId);
+            const apts = building ? (building.apartments || []) : [];
+
+            let html = '<option value="">-- بدون تحديد شقة (أو اختر الشقة) --</option>';
+            let foundSelected = false;
+
+            apts.forEach(apt => {
+                const aptNum = typeof apt === 'object' && apt !== null ? apt.number : apt;
+                const aptFloor = typeof apt === 'object' && apt !== null && apt.floor ? ` (الدور ${apt.floor})` : '';
+                const isSelected = selectedApt && String(selectedApt).trim() === String(aptNum).trim();
+                if (isSelected) foundSelected = true;
+                html += `<option value="${aptNum}" ${isSelected ? 'selected' : ''}>شقة ${aptNum}${aptFloor}</option>`;
+            });
+
+            if (selectedApt && String(selectedApt).trim() !== '' && !foundSelected) {
+                html += `<option value="${selectedApt}" selected>شقة ${selectedApt} (مخصصة)</option>`;
+            }
+
+            aptSelect.innerHTML = html;
+        }
+
+function openWorkerAddModal(preFacId = null) {
             const factories = DB.get('Factories').filter(f => f.status === 'Active');
             const housing = DB.get('Housing');
             openModal(`
@@ -5284,14 +5317,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>🏠 عمارة السكن (اختياري)</label>
-                        <select id="w-building">
+                        <select id="w-building" onchange="updateWorkerApartmentsDropdown()">
                             <option value="">-- بدون سكن (خارجي) --</option>
                             ${housing.map(h => `<option value="${h.id}">عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>🚪 رقم الشقة بالسكن</label>
-                        <input type="text" id="w-apartment" placeholder="مثال: شقة 10 أو 5">
+                        <select id="w-apartment">
+                            <option value="">-- اختر العمارة أولاً --</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-group"><label>ملاحظات</label><textarea id="w-notes" rows="2"></textarea></div>
@@ -5300,6 +5335,7 @@
                     <button class="btn btn-primary" onclick="saveWorkerData(null, ${preFacId})">💾 حفظ العامل</button>
                 </div>
             `);
+            updateWorkerApartmentsDropdown();
         }
 
         function openWorkerEditModal(workerId) {
@@ -5344,14 +5380,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label>🏠 عمارة السكن</label>
-                        <select id="w-building">
+                        <select id="w-building" onchange="updateWorkerApartmentsDropdown()">
                             <option value="">-- بدون سكن (خارجي) --</option>
                             ${housing.map(h => `<option value="${h.id}" ${worker.buildingId && Number(worker.buildingId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                         </select>
                     </div>
                     <div class="form-group">
                         <label>🚪 رقم الشقة بالسكن</label>
-                        <input type="text" id="w-apartment" value="${worker.apartment || ''}" placeholder="مثال: شقة 10 أو 5">
+                        <select id="w-apartment">
+                            <option value="">-- اختر العمارة أولاً --</option>
+                        </select>
                     </div>
                 </div>
                 <div class="form-row">
@@ -5364,6 +5402,7 @@
                     <button class="btn btn-success" onclick="saveWorkerData(${workerId})">💾 حفظ التعديلات</button>
                 </div>
             `);
+            updateWorkerApartmentsDropdown(worker.apartment);
         }
 
         function saveWorkerData(workerId, returnFacId = null) {
