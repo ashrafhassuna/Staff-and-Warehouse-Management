@@ -2402,6 +2402,8 @@
             const factories = DB.get('Factories');
             const housing = DB.get('Housing');
 
+            const jobTitles = [...new Set(workers.map(w => (w.jobTitle || '').trim()).filter(Boolean))].sort();
+
             let rows = workers.map(w => {
                 const fac = factories.find(f => Number(f.id) === Number(w.factoryId));
                 const unsettled = getWorkerTotalUnsettled(w.id);
@@ -2421,7 +2423,7 @@
                 }
                 
                 return `
-                    <tr data-worker-id="${w.id}" data-factory-id="${w.factoryId || ''}" data-status="${w.status || ''}" data-unsettled="${unsettled > 0}" data-start-date="${w.startDate || ''}" style="${(w.status==='Left'||w.status==='Terminated') && unsettled>0 ? 'background:rgba(239, 68, 68, 0.07);' : ''}">
+                    <tr data-worker-id="${w.id}" data-factory-id="${w.factoryId || ''}" data-job-title="${w.jobTitle || ''}" data-status="${w.status || ''}" data-unsettled="${unsettled > 0}" data-start-date="${w.startDate || ''}" style="${(w.status==='Left'||w.status==='Terminated') && unsettled>0 ? 'background:rgba(239, 68, 68, 0.07);' : ''}">
                         <td><strong>${w.code}</strong></td>
                         <td><strong>${w.name}</strong></td>
                         <td>${w.mobile}</td>
@@ -2475,6 +2477,15 @@
                             <select id="worker-factory-filter" onchange="filterWorkersTableLive()" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:bold;">
                                 <option value="all">🏢 كل المصانع</option>
                                 ${factories.map(f => `<option value="${f.id}">🏭 ${f.name}</option>`).join('')}
+                            </select>
+                        </div>
+
+                        <!-- Job Title Filter -->
+                        <div>
+                            <label style="font-size:0.82rem; font-weight:bold; margin-bottom:4px; display:block; color:var(--text-secondary);">💼 المسمى الوظيفي:</label>
+                            <select id="worker-jobtitle-filter" onchange="filterWorkersTableLive()" style="width:100%; padding:7px 10px; border-radius:6px; border:1px solid var(--border); background:var(--surface); color:var(--text); font-weight:bold;">
+                                <option value="all">💼 كل المسميات الوظيفية</option>
+                                ${jobTitles.map(jt => `<option value="${jt}">👔 ${jt}</option>`).join('')}
                             </select>
                         </div>
 
@@ -2553,6 +2564,7 @@
         function filterWorkersTableLive() {
             const facFilter = document.getElementById('worker-factory-filter')?.value || 'all';
             const statusFilter = document.getElementById('worker-status-filter')?.value || 'all';
+            const jobTitleFilter = document.getElementById('worker-jobtitle-filter')?.value || 'all';
             const dateFrom = document.getElementById('worker-date-from')?.value || '';
             const dateTo = document.getElementById('worker-date-to')?.value || '';
             const searchTerm = document.getElementById('worker-search')?.value.toLowerCase().trim() || '';
@@ -2562,6 +2574,7 @@
 
             rows.forEach(r => {
                 const facId = r.getAttribute('data-factory-id');
+                const jobTitle = r.getAttribute('data-job-title');
                 const status = r.getAttribute('data-status');
                 const hasUnsettled = r.getAttribute('data-unsettled') === 'true';
                 const startDate = r.getAttribute('data-start-date') || '';
@@ -2582,22 +2595,25 @@
                     matchesStatus = (status === 'Left' || status === 'Terminated') && hasUnsettled;
                 }
 
-                // 3. Date From Filter
+                // 3. Job Title Filter
+                let matchesJobTitle = (jobTitleFilter === 'all') || (jobTitle === jobTitleFilter);
+
+                // 4. Date From Filter
                 let matchesDateFrom = true;
                 if (dateFrom) {
                     matchesDateFrom = startDate ? (startDate >= dateFrom) : false;
                 }
 
-                // 4. Date To Filter
+                // 5. Date To Filter
                 let matchesDateTo = true;
                 if (dateTo) {
                     matchesDateTo = startDate ? (startDate <= dateTo) : false;
                 }
 
-                // 5. Search Text Filter
+                // 6. Search Text Filter
                 let matchesSearch = !searchTerm || textContent.includes(searchTerm);
 
-                const show = matchesFactory && matchesStatus && matchesDateFrom && matchesDateTo && matchesSearch;
+                const show = matchesFactory && matchesStatus && matchesJobTitle && matchesDateFrom && matchesDateTo && matchesSearch;
                 r.style.display = show ? '' : 'none';
                 if (show) visibleCount++;
             });
@@ -2609,12 +2625,14 @@
         function resetWorkerFilters() {
             const facFilter = document.getElementById('worker-factory-filter');
             const statusFilter = document.getElementById('worker-status-filter');
+            const jobTitleFilter = document.getElementById('worker-jobtitle-filter');
             const dateFrom = document.getElementById('worker-date-from');
             const dateTo = document.getElementById('worker-date-to');
             const searchInput = document.getElementById('worker-search');
 
             if (facFilter) facFilter.value = 'all';
             if (statusFilter) statusFilter.value = 'all';
+            if (jobTitleFilter) jobTitleFilter.value = 'all';
             if (dateFrom) dateFrom.value = '';
             if (dateTo) dateTo.value = '';
             if (searchInput) searchInput.value = '';
