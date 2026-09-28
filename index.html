@@ -390,7 +390,8 @@
             border: 1px solid var(--border);
         }
         .modal.modal-lg {
-            max-width: 850px;
+            max-width: 950px;
+            width: 95%;
         }
         .modal-header {
             display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
@@ -5768,18 +5769,118 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
             }
         }
 
+        let issueRowCounter = 0;
+
+        function filterIssueWorkerOptions() {
+            const query = (document.getElementById('m-iss-worker-search')?.value || '').trim().toLowerCase();
+            const select = document.getElementById('m-iss-worker');
+            if (!select) return;
+
+            const normQuery = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
+            const options = Array.from(select.options);
+            let firstVisible = null;
+
+            options.forEach(opt => {
+                const text = opt.textContent.toLowerCase();
+                const code = (opt.getAttribute('data-code') || '').toLowerCase();
+                const name = (opt.getAttribute('data-name') || '').toLowerCase();
+                const job = (opt.getAttribute('data-job') || '').toLowerCase();
+                const phone = (opt.getAttribute('data-phone') || '').toLowerCase();
+
+                const combined = `${code} ${name} ${job} ${phone} ${text}`;
+                const normCombined = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
+
+                if (!normQuery || normCombined.includes(normQuery)) {
+                    opt.style.display = '';
+                    if (!firstVisible) firstVisible = opt;
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+
+            if (firstVisible && select.selectedOptions[0]?.style.display === 'none') {
+                select.value = firstVisible.value;
+            }
+        }
+
+        function createIssueItemRowHtml(rowId) {
+            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            return `
+                <div class="iss-row-card" id="iss-row-${rowId}" style="background:var(--surface); padding:14px; border-radius:8px; border:1px solid var(--border); margin-bottom:10px; position:relative;">
+                    <div style="display:grid; grid-template-columns: 2fr 1.2fr 1fr auto; gap:12px; align-items:end;">
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:0.85rem; font-weight:bold;">الصنف *</label>
+                            <select class="iss-item-select" onchange="refreshModalIssueStock(${rowId})">
+                                ${items.map(i => {
+                                    const catLabel = i.category === 'ADMIN' ? '[إداري]' : (i.category === 'HOUSING' ? '[سكن]' : '[موظفين]');
+                                    return `<option value="${i.id}">${catLabel} ${i.name} (${i.unit || 'قطعة'})</option>`;
+                                }).join('')}
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:0.85rem; font-weight:bold;">حالة الصنف *</label>
+                            <select class="iss-cond-select" onchange="refreshModalIssueStock(${rowId})">
+                                <option value="NEW">جديد (NEW)</option>
+                                <option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin:0;">
+                            <label style="font-size:0.85rem; font-weight:bold;">الكمية *</label>
+                            <input type="number" class="iss-qty-input" value="1" min="1" style="font-weight:bold; text-align:center;">
+                        </div>
+                        <div style="display:flex; align-items:center;">
+                            <button type="button" class="btn btn-danger btn-sm iss-remove-btn" onclick="removeModalIssueRow(${rowId})" title="حذف الصنف" style="height:40px; padding:0 12px; font-weight:bold;">🗑️</button>
+                        </div>
+                    </div>
+                    <div id="iss-stock-display-${rowId}" class="iss-stock-display" style="margin-top:8px; font-size:0.88rem; font-weight:bold; color:var(--primary);"></div>
+                </div>
+            `;
+        }
+
+        function addModalIssueRow() {
+            const container = document.getElementById('m-iss-rows-container');
+            if (!container) return;
+            issueRowCounter++;
+            const rowId = issueRowCounter;
+            container.insertAdjacentHTML('beforeend', createIssueItemRowHtml(rowId));
+            refreshModalIssueStock(rowId);
+            updateModalIssueRemoveButtons();
+        }
+
+        function removeModalIssueRow(rowId) {
+            const rowEl = document.getElementById(`iss-row-${rowId}`);
+            if (rowEl) {
+                rowEl.remove();
+                updateModalIssueRemoveButtons();
+            }
+        }
+
+        function updateModalIssueRemoveButtons() {
+            const rows = document.querySelectorAll('.iss-row-card');
+            rows.forEach(r => {
+                const btn = r.querySelector('.iss-remove-btn');
+                if (btn) {
+                    btn.style.display = rows.length > 1 ? 'flex' : 'none';
+                }
+            });
+        }
+
         function openIssueModal(preWhId = null, preTargetType = 'WORKER', preTargetId = null, preApt = null) {
             const activeWorkers = DB.get('Workers').filter(w => w.status === 'Active');
             const activeSupervisors = DB.get('Supervisors').filter(s => s.status === 'Active');
             const activeWarehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
             const housing = DB.get('Housing');
-            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+
+            issueRowCounter = 0;
 
             openModal(`
-                <div class="modal-header"><h3>📤 صرف عهدة جديدة</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div class="modal-header">
+                    <h3>📤 صرف عهدة جديدة (إذن صرف متعدد الأصناف)</h3>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
                 <div id="modal-issue-alert"></div>
                 
-                <div class="form-group" style="background:var(--bg); padding:10px 12px; border-radius:8px; border:1px solid var(--border); margin-bottom:15px;">
+                <div class="form-group" style="background:var(--bg); padding:12px 14px; border-radius:8px; border:1px solid var(--border); margin-bottom:15px;">
                     <label style="font-weight:bold; margin-bottom:8px; display:block;">🎯 نوع / جهة صرف العهدة:</label>
                     <div style="display:flex; gap:16px; flex-wrap:wrap;">
                         <label style="cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold;">
@@ -5799,15 +5900,18 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
                 <!-- 1. Worker Target -->
                 <div id="iss-container-worker" class="form-group" style="${preTargetType==='WORKER'?'':'display:none;'}">
-                    <label>${t('worker')} *</label>
+                    <label style="font-weight:bold;">${t('worker')} *</label>
+                    <div style="position:relative; margin-bottom:8px;">
+                        <input type="text" id="m-iss-worker-search" placeholder="🔍 ابحث باسم العامل، الكود، الوظيفة، أو رقم الهاتف..." oninput="filterIssueWorkerOptions()" style="background:var(--surface);">
+                    </div>
                     <select id="m-iss-worker">
-                        ${activeWorkers.map(w => `<option value="${w.id}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name}</option>`).join('')}
+                        ${activeWorkers.map(w => `<option value="${w.id}" data-name="${w.name}" data-code="${w.code}" data-job="${w.jobTitle||''}" data-phone="${w.mobile||''}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name} ${w.jobTitle?`(${w.jobTitle})`:''}</option>`).join('')}
                     </select>
                 </div>
 
                 <!-- 2. Supervisor Target -->
                 <div id="iss-container-supervisor" class="form-group" style="${preTargetType==='SUPERVISOR'?'':'display:none;'}">
-                    <label>الإداري المستلم للعهدة الإدارية *</label>
+                    <label style="font-weight:bold;">الإداري المستلم للعهدة الإدارية *</label>
                     <select id="m-iss-supervisor">
                         ${activeSupervisors.map(s => `<option value="${s.id}" ${preTargetId&&Number(preTargetId)===Number(s.id)?'selected':''}>${s.code} - ${s.name} (${s.mobile})</option>`).join('')}
                     </select>
@@ -5817,20 +5921,20 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 <div id="iss-container-housing" style="${preTargetType==='HOUSING'?'':'display:none;'}">
                     <div class="form-row">
                         <div class="form-group">
-                            <label>عمارة السكن *</label>
+                            <label style="font-weight:bold;">عمارة السكن *</label>
                             <select id="m-iss-building" onchange="updateIssueApartmentsDropdown()">
                                 ${housing.map(h => `<option value="${h.id}" ${preTargetId&&Number(preTargetId)===Number(h.id)?'selected':''}>عمارة ${h.number || ''} - ${h.name}</option>`).join('')}
                             </select>
                         </div>
                         <div class="form-group">
-                            <label>رقم الشقة</label>
+                            <label style="font-weight:bold;">رقم الشقة</label>
                             <select id="m-iss-apt">
                                 <option value="">-- العمارة بالكامل (بدون تحديد شقة) --</option>
                             </select>
                         </div>
                     </div>
                     <div class="form-group">
-                        <label>المشرف المسؤول عن استلام عهدة السكن *</label>
+                        <label style="font-weight:bold;">المشرف المسؤول عن استلام عهدة السكن *</label>
                         <select id="m-iss-housing-sup">
                             <option value="">-- بدون مشرف محدد --</option>
                             ${activeSupervisors.map(s => `<option value="${s.id}">${s.name} (${s.mobile})</option>`).join('')}
@@ -5838,38 +5942,43 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                     </div>
                 </div>
 
+                <!-- Warehouse Select -->
                 <div class="form-group">
-                    <label>${t('warehouse')} *</label>
+                    <label style="font-weight:bold;">المخزن المصدر *</label>
                     <select id="m-iss-wh" onchange="refreshModalIssueStock()">${activeWarehouses.map(w => `<option value="${w.id}" ${preWhId&&Number(preWhId)===Number(w.id)?'selected':''}>${w.name}</option>`).join('')}</select>
                 </div>
                 
-                <div class="form-group">
-                    <label>${t('item')} *</label>
-                    <select id="m-iss-item" onchange="refreshModalIssueStock()">
-                        ${items.map(i => {
-                            const catLabel = i.category === 'ADMIN' ? '[إداري]' : (i.category === 'HOUSING' ? '[سكن]' : '[موظفين]');
-                            return `<option value="${i.id}">${catLabel} ${i.name} (${i.unit || 'قطعة'})</option>`;
-                        }).join('')}
-                    </select>
+                <!-- Multi-Item Container -->
+                <div class="form-group" style="background:var(--bg); padding:14px; border-radius:10px; border:1px solid var(--border); margin-bottom:15px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+                        <label style="font-weight:bold; font-size:1.05rem; margin:0; color:var(--primary);">📦 أصناف إذن الصرف:</label>
+                        <button type="button" class="btn btn-sm btn-primary" onclick="addModalIssueRow()" style="gap:4px; font-weight:bold;">➕ إضافة صنف آخر للإذن</button>
+                    </div>
+                    
+                    <div id="m-iss-rows-container">
+                        <!-- Rows injected dynamically -->
+                    </div>
                 </div>
-                
+
                 <div class="form-row">
                     <div class="form-group">
-                        <label>${t('condition')} *</label>
-                        <select id="m-iss-cond" onchange="refreshModalIssueStock()"><option value="NEW">جديد (NEW)</option><option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option></select>
+                        <label style="font-weight:bold;">${t('date')} *</label>
+                        <input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}">
                     </div>
-                    <div class="form-group"><label>${t('quantity')} *</label><input type="number" id="m-iss-qty" value="1" min="1"></div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">${t('notes')}</label>
+                        <input type="text" id="m-iss-notes" placeholder="ملاحظات الصرف أو سبب الصرف...">
+                    </div>
                 </div>
-                <div id="m-iss-avail-display" style="margin-bottom:12px; font-weight:bold; color:var(--primary);"></div>
-                <div class="form-group"><label>${t('date')} *</label><input type="date" id="m-iss-date" value="${new Date().toISOString().split('T')[0]}"></div>
-                <div class="form-group"><label>${t('notes')}</label><textarea id="m-iss-notes" placeholder="ملاحظات الصرف"></textarea></div>
-                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid var(--border); padding-top:15px;">
                     <button class="btn" onclick="closeModal()">${t('cancel')}</button>
-                    <button class="btn btn-success" onclick="submitModalIssue(${preWhId})">💾 تأكيد الصرف</button>
+                    <button class="btn btn-success" onclick="submitModalIssue(${preWhId})" style="padding:10px 24px; font-size:1.05rem; font-weight:bold;">💾 تأكيد وأصدار إذن الصرف</button>
                 </div>
-            `);
+            `, true);
+
             updateIssueApartmentsDropdown(preApt);
-            refreshModalIssueStock();
+            addModalIssueRow();
         }
 
         function updateIssueApartmentsDropdown(selectedApt = null) {
@@ -5905,25 +6014,41 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
 
         function openIssueModalForWh(whId) { openIssueModal(whId); }
 
-        function refreshModalIssueStock() {
+        function refreshModalIssueStock(targetRowId = null) {
             const whSelect = document.getElementById('m-iss-wh');
-            const itemSelect = document.getElementById('m-iss-item');
-            const condSelect = document.getElementById('m-iss-cond');
-            const display = document.getElementById('m-iss-avail-display');
-            if (!whSelect || !itemSelect) return;
+            if (!whSelect) return;
+            const whId = whSelect.value;
 
-            const stock = getStock(whSelect.value, itemSelect.value, condSelect.value);
-            display.innerHTML = `المتاح للصرف من هذا الصنف بحالة (${condSelect.value}): <strong>${stock}</strong> قطعة`;
+            const rows = document.querySelectorAll('.iss-row-card');
+            rows.forEach(row => {
+                const idAttr = row.id.replace('iss-row-', '');
+                const rowId = Number(idAttr);
+
+                if (targetRowId !== null && Number(targetRowId) !== rowId) {
+                    return;
+                }
+
+                const itemSelect = row.querySelector('.iss-item-select');
+                const condSelect = row.querySelector('.iss-cond-select');
+                const display = document.getElementById(`iss-stock-display-${rowId}`);
+
+                if (itemSelect && condSelect && display) {
+                    const itemId = itemSelect.value;
+                    const cond = condSelect.value;
+                    const condText = cond === 'NEW' ? 'جديد' : 'مستعمل صالح';
+                    const stock = getStock(whId, itemId, cond);
+                    
+                    const badgeClass = stock > 0 ? 'badge-success' : 'badge-danger';
+                    display.innerHTML = `المتاح بالمخزن بحالة (${condText}): <span class="badge ${badgeClass}" style="font-size:0.9rem; padding:4px 8px;">${stock} قطعة</span>`;
+                }
+            });
         }
 
         function submitModalIssue(returnWhId = null) {
             const targetType = document.querySelector('input[name="iss-target-type"]:checked')?.value || 'WORKER';
-            const whId = Number(document.getElementById('m-iss-wh').value);
-            const itemId = Number(document.getElementById('m-iss-item').value);
-            const qty = Number(document.getElementById('m-iss-qty').value);
-            const cond = document.getElementById('m-iss-cond').value;
-            const date = document.getElementById('m-iss-date').value;
-            const notes = document.getElementById('m-iss-notes').value.trim();
+            const whId = Number(document.getElementById('m-iss-wh')?.value);
+            const date = document.getElementById('m-iss-date')?.value;
+            const notes = document.getElementById('m-iss-notes')?.value.trim() || '';
             const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
             const alertBox = document.getElementById('modal-issue-alert');
 
@@ -5954,45 +6079,85 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 }
             }
 
-            if (!whId || !itemId || !qty || qty <= 0) {
-                alertBox.innerHTML = `<div class="alert alert-danger">يرجى ملء جميع الحقول وتحديد كمية صحيحة</div>`;
+            if (!whId) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى تحديد المخزن المصدر</div>`;
                 return;
             }
 
-            const currentStock = getStock(whId, itemId, cond);
-            if (currentStock < qty) {
-                alertBox.innerHTML = `<div class="alert alert-danger">${t('insufficient_stock')} (المتاح حالياً: ${currentStock})</div>`;
+            const rowElements = document.querySelectorAll('.iss-row-card');
+            if (rowElements.length === 0) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى إضافة صنف واحد على الأقل لإذن الصرف</div>`;
                 return;
+            }
+
+            const issueItems = [];
+            const reqStockMap = {};
+            const custodyItems = DB.get('CustodyItems');
+
+            for (let i = 0; i < rowElements.length; i++) {
+                const row = rowElements[i];
+                const itemId = Number(row.querySelector('.iss-item-select')?.value);
+                const cond = row.querySelector('.iss-cond-select')?.value;
+                const qty = Number(row.querySelector('.iss-qty-input')?.value);
+
+                if (!itemId || !qty || qty <= 0) {
+                    alertBox.innerHTML = `<div class="alert alert-danger">يرجى اختيار صنف صحيح وتحديد كمية أكبر من صفر في السطر رقم ${i + 1}</div>`;
+                    return;
+                }
+
+                const key = `${itemId}_${cond}`;
+                reqStockMap[key] = (reqStockMap[key] || 0) + qty;
+                issueItems.push({ itemId, cond, qty });
+            }
+
+            for (const key in reqStockMap) {
+                const [itemIdStr, cond] = key.split('_');
+                const itemId = Number(itemIdStr);
+                const reqQty = reqStockMap[key];
+                const availableStock = getStock(whId, itemId, cond);
+
+                if (availableStock < reqQty) {
+                    const itemObj = custodyItems.find(it => Number(it.id) === itemId);
+                    const itemName = itemObj ? itemObj.name : `صنف #${itemId}`;
+                    const condText = cond === 'NEW' ? 'جديد' : 'مستعمل صالح';
+                    alertBox.innerHTML = `<div class="alert alert-danger">الكمية المطلوبة للصنف <strong>${itemName}</strong> بحالة (${condText}) هي <strong>${reqQty}</strong> قطعة، ولكن المتاح حالياً بالمخزن هو <strong>${availableStock}</strong> قطعة فقط!</div>`;
+                    return;
+                }
             }
 
             const txs = DB.get('Transactions');
-            const newTx = {
-                id: DB.nextId('Transactions'),
-                date: date || new Date().toISOString().split('T')[0],
-                type: 'ISSUE',
-                targetType: targetType,
-                warehouseId: whId,
-                workerId: workerId,
-                supervisorId: supervisorId,
-                buildingId: buildingId,
-                apartment: apt,
-                itemId: itemId,
-                quantity: qty,
-                condition: cond,
-                operator: op,
-                notes: notes
-            };
-            txs.push(newTx); DB.set('Transactions', txs);
 
-            let auditDesc = `صرف ${qty} قطعة`;
-            if (targetType === 'WORKER') auditDesc += ` للعامل #${workerId}`;
-            if (targetType === 'SUPERVISOR') auditDesc += ` عهدة إدارية للمشرف #${supervisorId}`;
-            if (targetType === 'HOUSING') auditDesc += ` لسكن عمارة #${buildingId} ${apt ? `شقة ${apt}` : ''}`;
+            issueItems.forEach(item => {
+                const newTx = {
+                    id: DB.nextId('Transactions'),
+                    date: date || new Date().toISOString().split('T')[0],
+                    type: 'ISSUE',
+                    targetType: targetType,
+                    warehouseId: whId,
+                    workerId: workerId,
+                    supervisorId: supervisorId,
+                    buildingId: buildingId,
+                    apartment: apt,
+                    itemId: item.itemId,
+                    quantity: item.qty,
+                    condition: item.cond,
+                    operator: op,
+                    notes: notes
+                };
+                txs.push(newTx);
 
-            logAudit('Transactions', 'ISSUE', newTx.id, null, newTx, auditDesc);
+                let auditDesc = `صرف ${item.qty} قطعة من صنف #${item.itemId}`;
+                if (targetType === 'WORKER') auditDesc += ` للعامل #${workerId}`;
+                if (targetType === 'SUPERVISOR') auditDesc += ` عهدة إدارية للمشرف #${supervisorId}`;
+                if (targetType === 'HOUSING') auditDesc += ` لسكن عمارة #${buildingId} ${apt ? `شقة ${apt}` : ''}`;
+
+                logAudit('Transactions', 'ISSUE', newTx.id, null, newTx, auditDesc);
+            });
+
+            DB.set('Transactions', txs);
 
             closeModal();
-            alert('تم صرف العهدة بنجاح!');
+            alert(`تم إصدار إذن الصرف بنجاح وتوثيق ${issueItems.length} صنف/أصناف!`);
             if (targetType === 'SUPERVISOR') navigate('supervisors');
             else if (targetType === 'HOUSING') navigate('housing', { selectedBuildingId: buildingId });
             else if (returnWhId) navigate('warehouses', { selectedWarehouseId: returnWhId });
