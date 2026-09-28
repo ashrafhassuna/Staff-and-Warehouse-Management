@@ -537,15 +537,16 @@
         .print-header { display: none; }
         .print-signatures-footer { display: none; }
         @media print {
-            .sidebar, .top-bar, .btn, .modal-overlay, #lang-toggle, #theme-toggle, .no-print, .auth-overlay, .mobile-menu-btn, .sidebar-backdrop {
+            .sidebar, .top-bar, .btn, .modal-overlay, #lang-toggle, #theme-toggle, .no-print, .auth-overlay, .mobile-menu-btn, .sidebar-backdrop, .workers-filter-panel, input, select, label, .badge {
                 display: none !important;
             }
-            body { background: #fff !important; color: #000 !important; font-size: 12pt; display: block; direction: rtl; }
+            body { background: #fff !important; color: #000 !important; font-size: 11pt; display: block; direction: rtl; }
             .main-content { margin: 0 !important; padding: 0 !important; }
             .view-container { border: none !important; box-shadow: none !important; padding: 0 !important; }
-            table { width: 100% !important; border-collapse: collapse; }
-            th, td { border: 1px solid #555 !important; padding: 7px 9px !important; }
-            .print-header { display: block !important; margin-bottom: 20px; }
+            table { width: 100% !important; border-collapse: collapse; page-break-inside: auto; }
+            th, td { border: 1px solid #333 !important; padding: 7px 9px !important; text-align: center !important; }
+            th.no-print, td.no-print { display: none !important; }
+            .print-header { display: block !important; margin-bottom: 18px; border-bottom: 2px solid #222; padding-bottom: 12px; }
             .footer { display: none !important; }
             .no-print-in-table { display: none !important; }
 
@@ -2441,7 +2442,7 @@
                             }
                             ${(w.status==='Left'||w.status==='Terminated') && unsettled>0 ? '<div style="color:var(--danger); font-size:0.75rem; font-weight:bold; margin-top:2px;">🚨 مستقيل بعهدة!</div>' : ''}
                         </td>
-                        <td>
+                        <td class="no-print">
                             <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                 <button class="btn btn-sm btn-primary" onclick="openWorkerCustodyDetailsModal(${w.id})" title="عرض كافة تفاصيل العهد التي استلمها العامل">📦 تفاصيل العهد</button>
                                 <button class="btn btn-sm" onclick="openWorkerEditModal(${w.id})">✏️ تعديل شامل</button>
@@ -2453,7 +2454,7 @@
             }).join('');
 
             return `
-                <div style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:15px;">
+                <div class="no-print" style="background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:15px; margin-bottom:15px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
                         <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                             <button class="btn btn-primary" onclick="openWorkerAddModal()">${t('add_worker')}</button>
@@ -2541,7 +2542,7 @@
                                 <th>${t('start_date')}</th>
                                 <th>${t('work_status')}</th>
                                 <th>${t('unsettled_count')}</th>
-                                <th>${t('actions')}</th>
+                                <th class="no-print">${t('actions')}</th>
                             </tr>
                         </thead>
                         <tbody>${rows || `<tr><td colspan="12" style="text-align:center">${t('no_workers_match')}</td></tr>`}</tbody>
@@ -6592,9 +6593,17 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 logoContainer.innerHTML = '';
             }
 
-            // Single Report Title (Not Duplicated)
-            document.getElementById('print-report-title').textContent = title;
-            document.getElementById('print-date').textContent = 'تاريخ الاستخراج والطباعة: ' + new Date().toLocaleString('ar-EG');
+            // Executive Report Title Formatting
+            let displayTitle = title || 'تقرير رسمـي';
+            if (displayTitle === 'العمال' || displayTitle === 'Workers' || displayTitle === (typeof t === 'function' ? t('workers') : 'العمال')) {
+                displayTitle = 'تقرير كشف بيانات وحالات العماّل والعهد المسلمة';
+            }
+            
+            document.getElementById('print-report-title').textContent = displayTitle;
+            const now = new Date();
+            const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
+            const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
+            document.getElementById('print-date').textContent = `تاريخ إصدار التقرير: ${dateStr} - ${timeStr}`;
 
             window.print();
         }
