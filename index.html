@@ -4192,30 +4192,68 @@
             const select = document.getElementById('assign-worker-id');
             if (!select) return;
 
+            if (!select._allOptions) {
+                select._allOptions = Array.from(select.options).map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent,
+                    code: opt.getAttribute('data-code') || '',
+                    name: opt.getAttribute('data-name') || '',
+                    job: opt.getAttribute('data-job') || '',
+                    phone: opt.getAttribute('data-phone') || ''
+                }));
+            }
+
             const normQuery = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
-            const options = Array.from(select.options);
-            let firstVisible = null;
+            const currentVal = select.value;
 
-            options.forEach(opt => {
-                const text = opt.textContent.toLowerCase();
-                const code = (opt.getAttribute('data-code') || '').toLowerCase();
-                const name = (opt.getAttribute('data-name') || '').toLowerCase();
-                const job = (opt.getAttribute('data-job') || '').toLowerCase();
-                const phone = (opt.getAttribute('data-phone') || '').toLowerCase();
+            if (!normQuery) {
+                select.innerHTML = select._allOptions.map(o =>
+                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}" ${String(o.value) === String(currentVal) ? 'selected' : ''}>${o.text}</option>`
+                ).join('');
+                return;
+            }
 
-                const combined = `${code} ${name} ${job} ${phone} ${text}`;
+            const matches = [];
+            const nonMatches = [];
+
+            select._allOptions.forEach(o => {
+                if (!o.value) return;
+                const combined = `${o.code} ${o.name} ${o.job} ${o.phone} ${o.text}`;
                 const normCombined = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
-
-                if (!normQuery || normCombined.includes(normQuery)) {
-                    opt.style.display = '';
-                    if (!firstVisible) firstVisible = opt;
+                if (normCombined.includes(normQuery)) {
+                    matches.push(o);
                 } else {
-                    opt.style.display = 'none';
+                    nonMatches.push(o);
                 }
             });
 
-            if (firstVisible && select.selectedOptions[0]?.style.display === 'none') {
-                select.value = firstVisible.value;
+            let html = '';
+            if (matches.length > 0) {
+                html += `<option value="">-- نتائج البحث (${matches.length} عامل) --</option>`;
+                matches.forEach(o => {
+                    html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                });
+                if (nonMatches.length > 0) {
+                    html += `<option disabled style="background:var(--bg); color:var(--text-secondary);">──────── باقي العمال ────────</option>`;
+                    nonMatches.forEach(o => {
+                        html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                    });
+                }
+            } else {
+                html = `<option value="">❌ لا يوجد عمال مطابقين لـ "${query}"</option>`;
+            }
+
+            select.innerHTML = html;
+
+            if (matches.length > 0) {
+                const currentInMatches = matches.some(m => String(m.value) === String(currentVal));
+                if (currentInMatches) {
+                    select.value = currentVal;
+                } else {
+                    select.value = matches[0].value;
+                }
+            } else {
+                select.value = "";
             }
         }
 
@@ -6210,30 +6248,68 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             const select = document.getElementById('m-iss-worker');
             if (!select) return;
 
+            if (!select._allOptions) {
+                select._allOptions = Array.from(select.options).map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent,
+                    code: opt.getAttribute('data-code') || '',
+                    name: opt.getAttribute('data-name') || '',
+                    job: opt.getAttribute('data-job') || '',
+                    phone: opt.getAttribute('data-phone') || ''
+                }));
+            }
+
             const normQuery = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
-            const options = Array.from(select.options);
-            let firstVisible = null;
+            const currentVal = select.value;
 
-            options.forEach(opt => {
-                const text = opt.textContent.toLowerCase();
-                const code = (opt.getAttribute('data-code') || '').toLowerCase();
-                const name = (opt.getAttribute('data-name') || '').toLowerCase();
-                const job = (opt.getAttribute('data-job') || '').toLowerCase();
-                const phone = (opt.getAttribute('data-phone') || '').toLowerCase();
+            if (!normQuery) {
+                select.innerHTML = select._allOptions.map(o =>
+                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}" ${String(o.value) === String(currentVal) ? 'selected' : ''}>${o.text}</option>`
+                ).join('');
+                return;
+            }
 
-                const combined = `${code} ${name} ${job} ${phone} ${text}`;
+            const matches = [];
+            const nonMatches = [];
+
+            select._allOptions.forEach(o => {
+                if (!o.value) return;
+                const combined = `${o.code} ${o.name} ${o.job} ${o.phone} ${o.text}`;
                 const normCombined = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
-
-                if (!normQuery || normCombined.includes(normQuery)) {
-                    opt.style.display = '';
-                    if (!firstVisible) firstVisible = opt;
+                if (normCombined.includes(normQuery)) {
+                    matches.push(o);
                 } else {
-                    opt.style.display = 'none';
+                    nonMatches.push(o);
                 }
             });
 
-            if (firstVisible && select.selectedOptions[0]?.style.display === 'none') {
-                select.value = firstVisible.value;
+            let html = '';
+            if (matches.length > 0) {
+                html += `<option value="">-- نتائج البحث (${matches.length} عامل) --</option>`;
+                matches.forEach(o => {
+                    html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                });
+                if (nonMatches.length > 0) {
+                    html += `<option disabled style="background:var(--bg); color:var(--text-secondary);">──────── باقي العمال ────────</option>`;
+                    nonMatches.forEach(o => {
+                        html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                    });
+                }
+            } else {
+                html = `<option value="">❌ لا يوجد عمال مطابقين لـ "${query}"</option>`;
+            }
+
+            select.innerHTML = html;
+
+            if (matches.length > 0) {
+                const currentInMatches = matches.some(m => String(m.value) === String(currentVal));
+                if (currentInMatches) {
+                    select.value = currentVal;
+                } else {
+                    select.value = matches[0].value;
+                }
+            } else {
+                select.value = "";
             }
         }
 
@@ -6598,36 +6674,75 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             else navigate('warehouses');
         }
 
-                function filterReturnWorkerOptions() {
+        function filterReturnWorkerOptions() {
             const query = (document.getElementById('m-ret-worker-search')?.value || '').trim().toLowerCase();
             const select = document.getElementById('m-ret-worker');
             if (!select) return;
 
+            if (!select._allOptions) {
+                select._allOptions = Array.from(select.options).map(opt => ({
+                    value: opt.value,
+                    text: opt.textContent,
+                    code: opt.getAttribute('data-code') || '',
+                    name: opt.getAttribute('data-name') || '',
+                    job: opt.getAttribute('data-job') || '',
+                    phone: opt.getAttribute('data-phone') || ''
+                }));
+            }
+
             const normQuery = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
-            const options = Array.from(select.options);
-            let firstVisible = null;
+            const currentVal = select.value;
 
-            options.forEach(opt => {
-                if (!opt.value) return;
-                const text = opt.textContent.toLowerCase();
-                const code = (opt.getAttribute('data-code') || '').toLowerCase();
-                const name = (opt.getAttribute('data-name') || '').toLowerCase();
-                const job = (opt.getAttribute('data-job') || '').toLowerCase();
-                const phone = (opt.getAttribute('data-phone') || '').toLowerCase();
+            if (!normQuery) {
+                select.innerHTML = select._allOptions.map(o =>
+                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}" ${String(o.value) === String(currentVal) ? 'selected' : ''}>${o.text}</option>`
+                ).join('');
+                loadModalReturnList();
+                return;
+            }
 
-                const combined = `${code} ${name} ${job} ${phone} ${text}`;
+            const matches = [];
+            const nonMatches = [];
+
+            select._allOptions.forEach(o => {
+                if (!o.value) return;
+                const combined = `${o.code} ${o.name} ${o.job} ${o.phone} ${o.text}`;
                 const normCombined = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
-
-                if (!normQuery || normCombined.includes(normQuery)) {
-                    opt.style.display = '';
-                    if (!firstVisible) firstVisible = opt;
+                if (normCombined.includes(normQuery)) {
+                    matches.push(o);
                 } else {
-                    opt.style.display = 'none';
+                    nonMatches.push(o);
                 }
             });
 
-            if (firstVisible && select.selectedOptions[0]?.style.display === 'none') {
-                select.value = firstVisible.value;
+            let html = '';
+            if (matches.length > 0) {
+                html += `<option value="">-- نتائج البحث (${matches.length} عامل) --</option>`;
+                matches.forEach(o => {
+                    html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                });
+                if (nonMatches.length > 0) {
+                    html += `<option disabled style="background:var(--bg); color:var(--text-secondary);">──────── باقي العمال ────────</option>`;
+                    nonMatches.forEach(o => {
+                        html += `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" data-job="${o.job}" data-phone="${o.phone}">${o.text}</option>`;
+                    });
+                }
+            } else {
+                html = `<option value="">❌ لا يوجد عمال مطابقين لـ "${query}"</option>`;
+            }
+
+            select.innerHTML = html;
+
+            if (matches.length > 0) {
+                const currentInMatches = matches.some(m => String(m.value) === String(currentVal));
+                if (currentInMatches) {
+                    select.value = currentVal;
+                } else {
+                    select.value = matches[0].value;
+                }
+                loadModalReturnList();
+            } else {
+                select.value = "";
                 loadModalReturnList();
             }
         }
