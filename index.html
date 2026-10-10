@@ -1712,6 +1712,9 @@
                             ${company.commercialReg ? `<div>📋 السجل التجاري: <strong style="color:var(--text);">${company.commercialReg}</strong></div>` : ''}
                             ${company.taxCard ? `<div>🏛️ البطاقة الضريبية: <strong style="color:var(--text);">${company.taxCard}</strong></div>` : ''}
                         </div>
+                        <div style="margin-top:10px;">
+                            <button class="btn btn-success" style="padding:8px 16px; font-weight:bold; font-size:0.9rem;" onclick="exportMasterComprehensiveExcel()">📊 تصدير ملف إكسيل الشامل للنظام بالكامل (مُبَوَّب بالشيتات)</button>
+                        </div>
                     </div>
                     <div class="company-logo-side">
                         ${company.logo ? 
@@ -2788,6 +2791,137 @@
             XLSX.utils.book_append_sheet(wb, ws, 'Administrators_Template');
             downloadExcelWorkbook(wb, 'Administrators_Template.xlsx');
         }
+
+        // --- Master Comprehensive Multi-Sheet Excel Export (تصدير الملف الشامل المُبَوَّب) ---
+        function exportMasterComprehensiveExcel() {
+            const wb = XLSX.utils.book_new();
+
+            // 1. Sheet: Workers (العمال)
+            const workers = DB.get('Workers');
+            const factories = DB.get('Factories');
+            const housing = DB.get('Housing');
+
+            const workerHeaders = ['كود العامل', 'اسم العامل', 'رقم الهاتف', 'الرقم القومي', 'المسمى الوظيفي', 'المصنع التابع له', 'عمارة السكن الحالي', 'رقم الشقة بالسكن', 'تاريخ التعيين', 'الحالة الوظيفية', 'العهد المعلقة', 'ملاحظات'];
+            const workerRows = workers.map(w => {
+                const fac = factories.find(f => Number(f.id) === Number(w.factoryId))?.name || '-';
+                let bName = '-';
+                if (w.buildingId) {
+                    const b = housing.find(h => Number(h.id) === Number(w.buildingId));
+                    bName = b ? `عمارة ${b.number || ''} ${b.name ? `(${b.name})` : ''}`.trim() : '-';
+                } else if (w.prevHousingText) {
+                    bName = `سابقاً: ${w.prevHousingText}`;
+                }
+                const unsettled = typeof getWorkerTotalUnsettled === 'function' ? getWorkerTotalUnsettled(w.id) : 0;
+                const statusText = w.status === 'Active' ? 'نشط (على رأس العمل)' : (w.status === 'Left' ? 'مستقيل / مغادر' : 'منهي خدمته');
+
+                return [
+                    w.code, w.name, w.mobile, w.nationalId || '-', w.jobTitle || '-',
+                    fac, bName, w.apartment || '-', w.startDate || '-', statusText,
+                    unsettled > 0 ? `${unsettled} قطعة معلقة` : 'خالص', w.notes || '-'
+                ];
+            });
+            const wsWorkers = XLSX.utils.aoa_to_sheet([workerHeaders, ...workerRows]);
+            XLSX.utils.book_append_sheet(wb, wsWorkers, 'العمال');
+
+            // 2. Sheet: Administrators / Supervisors (الإداريين والمشرفين)
+            const supervisors = DB.get('Supervisors');
+            const supHeaders = ['كود الإداري', 'اسم الإداري', 'المسمى الوظيفي/القسم', 'موبيل العمل', 'الموبيل الشخصي', 'المصانع التابعة', 'الحالة الوظيفية', 'ملاحظات'];
+            const supRows = supervisors.map(s => {
+                const facNames = (s.factoryIds || []).map(fid => factories.find(f => Number(f.id) === Number(fid))?.name || fid).join(', ');
+                return [
+                    s.code || '-', s.name || '-', s.jobTitle || 'إداري',
+                    s.mobile || '-', s.personalMobile || '-', facNames || 'عام',
+                    s.status === 'Active' ? 'نشط' : 'غير نشط', s.notes || '-'
+                ];
+            });
+            const wsSupervisors = XLSX.utils.aoa_to_sheet([supHeaders, ...supRows]);
+            XLSX.utils.book_append_sheet(wb, wsSupervisors, 'الإداريين');
+
+            // 3. Sheet: Housing & Apartments (السكن والعماير والشقق)
+            const housingHeaders = ['رقم العمارة', 'اسم العمارة', 'العنوان', 'رقم الشقة', 'الدور', 'عدد العمال المسكنين', 'أسماء العمال المقيمين بالشقة', 'عهد الشقة المسجلة'];
+            const housingRows = [];
+            housing.forEach(h => {
+                const apts = h.apartments || [];
+                if (apts.length === 0) {
+                    housingRows.push([h.number || '-', h.name || '-', h.address || '-', 'بدون شقق', '-', 0, 'لا يوجد عمال', '-']);
+                } else {
+                    apts.forEach(apt => {
+                        const aptWorkers = workers.filter(w => Number(w.buildingId) === Number(h.id) && String(w.apartment) === String(apt.number));
+                        const workerNames = aptWorkers.map(w => `${w.name} (${w.code})`).join(' ، ') || 'لا يوجد عمال';
+                        const aptCustody = typeof getHousingCustodySummaryString === 'function' ? getHousingCustodySummaryString(h.id, apt.number) : '-';
+                        housingRows.push([
+                            h.number || '-', h.name || '-', h.address || '-',
+                            `شقة ${apt.number}`, apt.floor ? `الدور ${apt.floor}` : '-',
+                            aptWorkers.length, workerNames, aptCustody
+                        ]);
+                    });
+                }
+            });
+            const wsHousing = XLSX.utils.aoa_to_sheet([housingHeaders, ...housingRows]);
+            XLSX.utils.book_append_sheet(wb, wsHousing, 'السكن والشقق');
+
+            // 4. Sheet: Warehouses & Stock (المخازن والمخزون)
+            const warehouses = DB.get('Warehouses');
+            const items = DB.get('CustodyItems');
+            const whHeaders = ['كود المخزن', 'اسم المخزن', 'الموقع', 'الشخص المسؤول', 'كود الصنف', 'اسم الصنف', 'رصيد جديد', 'رصيد مستعمل صالح', 'إجمالي المتاح للصرف', 'تالف', 'مفقود'];
+            const whRows = [];
+            warehouses.forEach(wh => {
+                items.forEach(i => {
+                    const newS = getStock(wh.id, i.id, 'NEW');
+                    const retS = getStock(wh.id, i.id, 'RETURNED_USED');
+                    const damS = getStock(wh.id, i.id, 'DAMAGED');
+                    const losS = getStock(wh.id, i.id, 'LOST');
+                    const totalAvail = newS + retS;
+
+                    if (totalAvail > 0 || damS > 0 || losS > 0) {
+                        whRows.push([
+                            wh.code, wh.name, wh.location || '-', wh.responsible || '-',
+                            i.code, i.name, newS, retS, totalAvail, damS, losS
+                        ]);
+                    }
+                });
+            });
+            const wsWarehouses = XLSX.utils.aoa_to_sheet([whHeaders, ...whRows]);
+            XLSX.utils.book_append_sheet(wb, wsWarehouses, 'المخازن والمخزون');
+
+            // 5. Sheet: Transactions Ledger (سجل حركات العهد والقيود)
+            const txs = DB.get('Transactions');
+            const txHeaders = ['رقم الحركة', 'التاريخ', 'نوع الحركة', 'المخزن', 'المستلم / الجهة', 'الصنف', 'الكمية', 'حالة الصنف', 'المُنَفِذ', 'الملاحظات'];
+            const txRows = txs.slice().reverse().map(tx => {
+                const whName = warehouses.find(w => Number(w.id) === Number(tx.warehouseId))?.name || `مخزن #${tx.warehouseId}`;
+                const itmName = items.find(i => Number(i.id) === Number(tx.itemId))?.name || `صنف #${tx.itemId}`;
+                let targetText = '-';
+                if (tx.workerId) {
+                    targetText = workers.find(w => Number(w.id) === Number(tx.workerId))?.name || `عامل #${tx.workerId}`;
+                } else if (tx.supervisorId) {
+                    targetText = supervisors.find(s => Number(s.id) === Number(tx.supervisorId))?.name || `إداري #${tx.supervisorId}`;
+                } else if (tx.buildingId) {
+                    targetText = `سكن عمارة #${tx.buildingId} ${tx.apartment ? `شقة ${tx.apartment}` : ''}`;
+                }
+
+                let typeLabel = tx.type;
+                if (tx.type === 'STOCK_IN') typeLabel = 'توريد جديد';
+                if (tx.type === 'ISSUE') typeLabel = 'صرف عهدة';
+                if (tx.type === 'SCRAP') typeLabel = 'إعدام وتخريد مخزون';
+                if (tx.type === 'RETURN_USED') typeLabel = 'رد مستعمل صالح';
+                if (tx.type === 'DAMAGED') typeLabel = 'تالف';
+                if (tx.type === 'LOST') typeLabel = 'مفقود';
+                if (tx.type === 'REVERSAL') typeLabel = 'عكس قيد';
+
+                return [
+                    tx.id, tx.date, typeLabel, whName, targetText,
+                    itmName, tx.quantity, tx.condition || '-', tx.operator || '-', tx.notes || '-'
+                ];
+            });
+            const wsTxs = XLSX.utils.aoa_to_sheet([txHeaders, ...txRows]);
+            XLSX.utils.book_append_sheet(wb, wsTxs, 'سجل حركات العهد');
+
+            // Save Master Excel File
+            const dateStr = new Date().toISOString().split('T')[0];
+            downloadExcelWorkbook(wb, `تقرير_النظام_الشامل_مُبَوّب_${dateStr}.xlsx`);
+            logAudit('System', 'EXPORT_MASTER_EXCEL', 1, null, null, 'تصدير تقرير النظام الشامل المُبَوَّب إلى ملف إكسيل واحد');
+        }
+
 
         // --- Safe File Reading & Template Validation ---
         function handleExcelImportFile(input, type) {
