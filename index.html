@@ -1,4 +1,29 @@
-<!DOCTYPE html>
+<!DOC
+
+                    <!-- Tab 4: Excel & Master Data Export -->
+                    <div id="tab-export-settings" style="display:${_currentSettingsTab==='export'?'block':'none'};">
+                        <div class="card" style="padding:22px; border:1px solid var(--border); background:var(--bg); border-radius:12px; margin-bottom:18px;">
+                            <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+                                <div style="font-size:2.2rem; color:var(--success);">📊</div>
+                                <div>
+                                    <h4 style="color:var(--primary); margin:0; font-size:1.15rem;">تصدير تقرير الإكسيل الشامل للنظام (Master Excel Workbook)</h4>
+                                    <div style="font-size:0.85rem; color:var(--text-secondary);">استخراج كافة بيانات النظام مجمعة ومبوبة في شيتات متعددة</div>
+                                </div>
+                            </div>
+                            <p style="color:var(--text); font-size:0.92rem; line-height:1.7; margin-bottom:18px; background:var(--surface); padding:12px; border-radius:8px; border:1px solid var(--border);">
+                                يولد هذا الخيار <strong>ملف إكسيل واحد كامل ومُنظم (.xlsx)</strong> يضم 5 تبويبات (Sheets) رئيسية منفصلة:<br>
+                                • <strong>شيت العال:</strong> يضم بيانات العمال وأرقام هاتفهم وسكنهم وموقف العهد.<br>
+                                • <strong>شيت الإداريين:</strong> يضم كافة بيانات المشرفين ومصانعهم.<br>
+                                • <strong>شيت السكن والشقق:</strong> يضم عمارات السكن والشقق والعمال المسكنين وعهد كل شقة.<br>
+                                • <strong>شيت المخازن:</strong> يضم أرصده المخازن المتاحة والتوالف والمفقودات لكل صنف.<br>
+                                • <strong>شيت حركات العهد:</strong> السجل التاريخي الكامل لعمليات التوريد والصرف والإعدام والرد.
+                            </p>
+                            <button class="btn btn-success" style="padding:12px 24px; font-weight:bold; font-size:1.05rem; width:100%; justify-content:center; gap:8px;" onclick="exportMasterComprehensiveExcel()">
+                                📥 تصدير وتحميل ملف الإكسيل الشامل للمحتوى بالكامل
+                            </button>
+                        </div>
+                    </div>
+TYPE html>
 <html lang="ar" dir="rtl" data-theme="light">
 <head>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1712,9 +1737,7 @@
                             ${company.commercialReg ? `<div>📋 السجل التجاري: <strong style="color:var(--text);">${company.commercialReg}</strong></div>` : ''}
                             ${company.taxCard ? `<div>🏛️ البطاقة الضريبية: <strong style="color:var(--text);">${company.taxCard}</strong></div>` : ''}
                         </div>
-                        <div style="margin-top:10px;">
-                            <button class="btn btn-success" style="padding:8px 16px; font-weight:bold; font-size:0.9rem;" onclick="exportMasterComprehensiveExcel()">📊 تصدير ملف إكسيل الشامل للنظام بالكامل (مُبَوَّب بالشيتات)</button>
-                        </div>
+
                     </div>
                     <div class="company-logo-side">
                         ${company.logo ? 
@@ -2651,6 +2674,14 @@
             if (searchInput) searchInput.value = '';
 
             filterWorkersTableLive();
+        }
+
+                function downloadExcelWorkbook(wb, filename) {
+            if (typeof XLSX !== 'undefined' && XLSX.writeFile) {
+                XLSX.writeFile(wb, filename);
+            } else {
+                alert('❌ مكتبة الإكسيل غير محملة، يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى');
+            }
         }
 
         // --- Workers Excel Export & Template ---
@@ -5140,6 +5171,7 @@
                         <button class="btn ${_currentSettingsTab==='company'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('company')">🏢 ${t('company_settings_tab')}</button>
                         <button class="btn ${_currentSettingsTab==='display'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('display')">🎨 ${t('display_settings_tab')}</button>
                         <button class="btn ${_currentSettingsTab==='account'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('account')">👤 حسابي والأمان</button>
+                        <button class="btn ${_currentSettingsTab==='export'?'btn-primary':''}" style="border-radius:8px 8px 0 0;" onclick="switchSettingsTab('export')">📊 تصدير الإكسيل والبيانات</button>
                     </div>
 
                     <!-- Tab 1: Company Settings -->
