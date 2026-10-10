@@ -2428,6 +2428,8 @@
                         housingText = `عمـارة: ${b.name || b.number}`;
                         if (w.apartment) housingText += ` (شقة ${w.apartment})`;
                     }
+                } else if (w.prevHousingText) {
+                    housingText = `<span style="color:var(--text-secondary);" title="السكن السابق قبل الاستقالة/ترك العمل">🏚️ سابقاً: ${w.prevHousingText}</span>`;
                 }
                 
                 return `
@@ -5395,6 +5397,7 @@ function openWorkerAddModal(preFacId = null) {
 
             openModal(`
                 <div class="modal-header"><h3>✏️ تعديل شامل لبيانات العامل</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                ${worker.prevHousingText ? `<div class="alert alert-warning" style="margin-bottom:12px; font-size:0.9rem;">🏚️ <strong>السكن السابق قبل الاستقالة/ترك العمل:</strong> ${worker.prevHousingText}</div>` : ''}
                 <div class="form-row">
                     <div class="form-group"><label>كود العامل *</label><input type="text" id="w-code" value="${worker.code}"></div>
                     <div class="form-group"><label>اسم العامل بالكامل *</label><input type="text" id="w-name" value="${worker.name}"></div>
@@ -5483,9 +5486,26 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
                 workers[idx].mobile = phone;
                 workers[idx].nationalId = natId;
                 workers[idx].factoryId = facId;
-                workers[idx].buildingId = buildingId;
-                workers[idx].apartment = apartment;
-                workers[idx].status = document.getElementById('w-status').value;
+                const newStatus = document.getElementById('w-status') ? document.getElementById('w-status').value : 'Active';
+                const curBuildingId = buildingId || old.buildingId;
+                const curApartment = apartment || old.apartment;
+
+                if (newStatus === 'Left' || newStatus === 'Terminated') {
+                    if (curBuildingId) {
+                        const housing = DB.get('Housing');
+                        const b = housing.find(h => Number(h.id) === Number(curBuildingId));
+                        const bName = b ? `عمارة ${b.number || ''} ${b.name ? `(${b.name})` : ''}`.trim() : `عمارة #${curBuildingId}`;
+                        workers[idx].prevBuildingId = curBuildingId;
+                        workers[idx].prevApartment = curApartment;
+                        workers[idx].prevHousingText = `${bName} ${curApartment ? `(شقة ${curApartment})` : ''}`.trim();
+                    }
+                    workers[idx].buildingId = '';
+                    workers[idx].apartment = '';
+                } else {
+                    workers[idx].buildingId = buildingId;
+                    workers[idx].apartment = apartment;
+                }
+                workers[idx].status = newStatus;
                 workers[idx].startDate = document.getElementById('w-start').value;
                 workers[idx].exitDate = document.getElementById('w-exit-date') ? document.getElementById('w-exit-date').value : '';
                 workers[idx].notes = notes;
@@ -6772,6 +6792,17 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             workers[idx].status = 'Left';
             workers[idx].exitDate = document.getElementById('exit-date').value;
             workers[idx].exitNotes = document.getElementById('exit-notes').value;
+
+            if (workers[idx].buildingId) {
+                const housing = DB.get('Housing');
+                const b = housing.find(h => Number(h.id) === Number(workers[idx].buildingId));
+                const bName = b ? `عمارة ${b.number || ''} ${b.name ? `(${b.name})` : ''}`.trim() : `عمارة #${workers[idx].buildingId}`;
+                workers[idx].prevBuildingId = workers[idx].buildingId;
+                workers[idx].prevApartment = workers[idx].apartment || '';
+                workers[idx].prevHousingText = `${bName} ${workers[idx].apartment ? `(شقة ${workers[idx].apartment})` : ''}`.trim();
+                workers[idx].buildingId = '';
+                workers[idx].apartment = '';
+            }
 
             DB.set('Workers', workers);
             const noteMsg = unsettled > 0 ? `إنهاء خدمة مع بقاء عهدة معلقة (${unsettled} قطعة)` : 'إنهاء خدمة - عهد مسواة';
