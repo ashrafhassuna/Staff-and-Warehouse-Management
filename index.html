@@ -1426,6 +1426,7 @@
                 if (Number(tx.warehouseId) === Number(warehouseId) && Number(tx.itemId) === Number(itemId)) {
                     if (tx.type === 'STOCK_IN' && tx.condition === condition) balance += Number(tx.quantity);
                     if (tx.type === 'ISSUE' && tx.condition === condition) balance -= Number(tx.quantity);
+                    if (tx.type === 'SCRAP' && tx.condition === condition) balance -= Number(tx.quantity);
                     if (tx.type === 'RETURN_USED' && condition === 'RETURNED_USED') balance += Number(tx.quantity);
                     if (tx.type === 'DAMAGED' && condition === 'DAMAGED') balance += Number(tx.quantity);
                     if (tx.type === 'LOST' && condition === 'LOST') balance += Number(tx.quantity);
@@ -1435,6 +1436,7 @@
                         if (orig && Number(orig.warehouseId) === Number(warehouseId) && Number(orig.itemId) === Number(itemId)) {
                             if (orig.type === 'STOCK_IN' && orig.condition === condition) balance -= Number(orig.quantity);
                             if (orig.type === 'ISSUE' && orig.condition === condition) balance += Number(orig.quantity);
+                            if (orig.type === 'SCRAP' && orig.condition === condition) balance += Number(orig.quantity);
                             if (orig.type === 'RETURN_USED' && condition === 'RETURNED_USED') balance -= Number(orig.quantity);
                             if (orig.type === 'DAMAGED' && condition === 'DAMAGED') balance -= Number(orig.quantity);
                             if (orig.type === 'LOST' && condition === 'LOST') balance -= Number(orig.quantity);
@@ -2192,6 +2194,7 @@
                         <button class="btn btn-success" onclick="openAddStockModal()">${t('add_stock_btn')}</button>
                         <button class="btn" onclick="openIssueModal()">${t('issue_btn')}</button>
                         <button class="btn" onclick="openReturnModal()">${t('return_custody')}</button>
+                        <button class="btn btn-danger" onclick="openScrapModal()">🔥 إعدام مخزون</button>
                     </div>
                 </div>
                 ${contentHtml}
@@ -2242,6 +2245,7 @@
                                 <button class="btn btn-sm btn-primary" onclick="openCustodyItemEditModal(${i.id}, ${wh.id})">✏️ تعديل</button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteCustodyItem(${i.id}, ${wh.id})">🗑️ حذف</button>
                                 <button class="btn btn-sm btn-success" onclick="openQuickAddStockModal(${wh.id}, ${i.id})">+ توريد</button>
+                                <button class="btn btn-sm btn-danger" onclick="openScrapModal(${wh.id}, ${i.id})" title="إعدام وتخريد كمية من هذا الصنف">🔥 إعدام</button>
                             </div>
                         </td>
                     </tr>
@@ -2257,6 +2261,7 @@
                 if (tx.type === 'STOCK_IN') { typeBadge = 'badge-success'; typeLabel = 'توريد جديد (Stock In)'; }
                 if (tx.type === 'ISSUE') { typeBadge = 'badge-primary'; typeLabel = 'صرف لعامل (Issue)'; }
                 if (tx.type === 'RETURN_USED') { typeBadge = 'badge-success'; typeLabel = 'رد مستعمل صالح'; }
+                if (tx.type === 'SCRAP') { typeBadge = 'badge-danger'; typeLabel = '🔥 إعدام مخزون (Scrap)'; }
                 if (tx.type === 'DAMAGED') { typeBadge = 'badge-danger'; typeLabel = 'تالف (Damaged)'; }
                 if (tx.type === 'LOST') { typeBadge = 'badge-danger'; typeLabel = 'مفقود (Lost)'; }
                 if (tx.type === 'REVERSAL') { typeBadge = 'badge-warning'; typeLabel = 'عكس قيد (Reversal)'; }
@@ -2289,6 +2294,7 @@
                         <button class="btn btn-primary" onclick="openCustodyItemAddModal(${wh.id})">➕ إضافة منتج جديد</button>
                         <button class="btn btn-success" onclick="openAddStockModalForWh(${wh.id})">📥 توريد كمية لهذا المخزن</button>
                         <button class="btn" onclick="openIssueModalForWh(${wh.id})">📤 صرف من هذا المخزن</button>
+                        <button class="btn btn-danger" onclick="openScrapModal(${wh.id})">🔥 إعدام من هذا المخزن</button>
                         <button class="btn" onclick="openWarehouseEditModal(${wh.id})">✏️ تعديل المخزن</button>
                         <button class="btn btn-danger" onclick="deleteWarehouse(${wh.id})">🗑️ حذف هذا المخزن</button>
                     </div>
@@ -5748,7 +5754,175 @@ const jobTitle = document.getElementById('w-jobtitle').value.trim();
         // ==========================================
         // 9. STOCK IN / ISSUE / RETURN
         // ==========================================
-        function openAddStockModal(preWhId = null, preItemId = null) {
+        
+        // ==========================================
+        // STOCK DISPOSAL & SCRAP ENGINE (إعدام وتخريد المخزون)
+        // ==========================================
+        function openScrapModal(preWhId = null, preItemId = null, preCond = 'NEW') {
+            const activeWarehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+
+            openModal(`
+                <div class="modal-header">
+                    <h3>🔥 إعدام وتخريد كمية من المخزون (Disposal / Scrap)</h3>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
+                <div id="modal-scrap-alert"></div>
+
+                <div class="alert alert-danger" style="margin-bottom:15px; font-size:0.9rem; background:rgba(239, 68, 68, 0.1); border-right:4px solid var(--danger);">
+                    <strong>⚠️ تنبيه مهم:</strong> عملية الإعدام تقوم بخصم الكمية المحددة نهائياً من رصيد المخزن المتاح لقرار لجنة التخريد أو التلف الكلي.
+                </div>
+                
+                <div class="form-group">
+                    <label style="font-weight:bold;">🏢 المخزن المصدر *</label>
+                    <select id="m-scrap-wh" onchange="refreshModalScrapStock()">
+                        ${activeWarehouses.map(w => `<option value="${w.id}" ${preWhId && Number(preWhId)===Number(w.id)?'selected':''}>${w.name} (${w.code})</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight:bold;">📦 الصنف المراد إعدامه *</label>
+                    <select id="m-scrap-item" onchange="refreshModalScrapStock()">
+                        ${items.map(i => `<option value="${i.id}" ${preItemId && Number(preItemId)===Number(i.id)?'selected':''}>[${i.code}] ${i.name} (${i.unit || 'قطعة'})</option>`).join('')}
+                    </select>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label style="font-weight:bold;">🏷️ حالة الصنف المراد إعدامها *</label>
+                        <select id="m-scrap-cond" onchange="refreshModalScrapStock()">
+                            <option value="NEW" ${preCond==='NEW'?'selected':''}>جديد (NEW)</option>
+                            <option value="RETURNED_USED" ${preCond==='RETURNED_USED'?'selected':''}>مستعمل صالح (RETURNED_USED)</option>
+                            <option value="DAMAGED" ${preCond==='DAMAGED'?'selected':''}>تالف (DAMAGED)</option>
+                            <option value="LOST" ${preCond==='LOST'?'selected':''}>مفقود (LOST)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">🔢 الكمية المراد إعدامها *</label>
+                        <input type="number" id="m-scrap-qty" value="1" min="1" style="font-weight:bold; text-align:center;">
+                    </div>
+                </div>
+
+                <div id="m-scrap-avail-display" style="margin-bottom:15px; padding:10px; background:var(--bg); border:1px solid var(--border); border-radius:8px; font-weight:bold; color:var(--primary);">
+                    <!-- Stock balance info injected dynamically -->
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label style="font-weight:bold;">📅 تاريخ الإعدام *</label>
+                        <input type="date" id="m-scrap-date" value="${new Date().toISOString().split('T')[0]}">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">📝 رقم القرار / محضر التخريد (اختياري)</label>
+                        <input type="text" id="m-scrap-ref" placeholder="مثال: محضر تخريد رقم 2026/04">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label style="font-weight:bold;">📋 سبب وتفاصيل قرار الإعدام *</label>
+                    <textarea id="m-scrap-notes" rows="3" placeholder="اكتب سبب الإعدام والتلف الكلي تفصيلياً (مثل: كسور بالغة غير قابلة للإصلاح، قرار لجنة التخريد المالي...)"></textarea>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:20px; border-top:1px solid var(--border); padding-top:15px;">
+                    <button class="btn" onclick="closeModal()">${t('cancel')}</button>
+                    <button class="btn btn-danger" onclick="submitModalScrap(${preWhId})" style="padding:10px 24px; font-weight:bold; font-size:1rem;">🔥 تأكيد وإصدار حركة الإعدام</button>
+                </div>
+            `, true);
+
+            refreshModalScrapStock();
+        }
+
+        function refreshModalScrapStock() {
+            const whSelect = document.getElementById('m-scrap-wh');
+            const itemSelect = document.getElementById('m-scrap-item');
+            const condSelect = document.getElementById('m-scrap-cond');
+            const display = document.getElementById('m-scrap-avail-display');
+            if (!whSelect || !itemSelect || !condSelect || !display) return;
+
+            const whId = whSelect.value;
+            const itemId = itemSelect.value;
+            const cond = condSelect.value;
+
+            const condText = cond === 'NEW' ? 'جديد' : (cond === 'RETURNED_USED' ? 'مستعمل صالح' : (cond === 'DAMAGED' ? 'تالف' : 'مفقود'));
+            const availableStock = getStock(whId, itemId, cond);
+
+            const badgeClass = availableStock > 0 ? 'badge-success' : 'badge-danger';
+            display.innerHTML = `الرصيد المتاح حالياً لهذا الصنف بحالة (<strong>${condText}</strong>) بهذا المخزن: <span class="badge ${badgeClass}" style="font-size:1rem; padding:4px 10px;">${availableStock} قطعة</span>`;
+        }
+
+        function submitModalScrap(returnWhId = null) {
+            const whId = Number(document.getElementById('m-scrap-wh')?.value);
+            const itemId = Number(document.getElementById('m-scrap-item')?.value);
+            const cond = document.getElementById('m-scrap-cond')?.value;
+            const qty = Number(document.getElementById('m-scrap-qty')?.value);
+            const date = document.getElementById('m-scrap-date')?.value;
+            const ref = document.getElementById('m-scrap-ref')?.value.trim() || '';
+            const notes = document.getElementById('m-scrap-notes')?.value.trim() || '';
+            const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
+            const alertBox = document.getElementById('modal-scrap-alert');
+
+            if (!whId || !itemId) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى تحديد المخزن والصنف المراد إعدامه</div>`;
+                return;
+            }
+
+            if (!qty || qty <= 0) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى كتابة كمية صحيحة أكبر من صفر</div>`;
+                return;
+            }
+
+            if (!notes) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى توضيح سبب وقرار الإعدام في خانة التفاصيل</div>`;
+                return;
+            }
+
+            const currentStock = getStock(whId, itemId, cond);
+            if (currentStock < qty) {
+                const condText = cond === 'NEW' ? 'جديد' : (cond === 'RETURNED_USED' ? 'مستعمل صالح' : (cond === 'DAMAGED' ? 'تالف' : 'مفقود'));
+                alertBox.innerHTML = `<div class="alert alert-danger">عفواً، الكمية المراد إعدامها (${qty}) أكبر من الرصيد المتاح لهذا الصنف بحالة (${condText}) في المخزن (${currentStock})!</div>`;
+                return;
+            }
+
+            if (!confirm(`هل أنت محقق وتؤكد إعدام كمية (${qty}) قطعة نهائياً من هذا المخزن؟`)) {
+                return;
+            }
+
+            const fullNotes = ref ? `[قرار تخريد: ${ref}] ${notes}` : notes;
+
+            const txs = DB.get('Transactions');
+            const newTx = {
+                id: DB.nextId('Transactions'),
+                date: date || new Date().toISOString().split('T')[0],
+                type: 'SCRAP',
+                warehouseId: whId,
+                workerId: null,
+                itemId: itemId,
+                quantity: qty,
+                condition: cond,
+                operator: op,
+                notes: fullNotes,
+                referenceNumber: ref
+            };
+            txs.push(newTx);
+            DB.set('Transactions', txs);
+
+            const items = DB.get('CustodyItems');
+            const itmObj = items.find(i => Number(i.id) === itemId);
+            const itemName = itmObj ? itmObj.name : `صنف #${itemId}`;
+
+            logAudit('Transactions', 'SCRAP', newTx.id, null, newTx, `إعدام وتخريد كمية ${qty} قطعة من صنف (${itemName}) من مخزن #${whId}`);
+
+            closeModal();
+            alert('🔥 تم توثيق وإصدار حركة إعدام المخزون بنجاح!');
+
+            if (returnWhId) {
+                navigate('warehouses', { selectedWarehouseId: returnWhId });
+            } else {
+                navigate('warehouses');
+            }
+        }
+
+function openAddStockModal(preWhId = null, preItemId = null) {
             const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
             const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
 
