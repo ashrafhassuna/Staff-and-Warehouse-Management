@@ -6598,6 +6598,65 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             else navigate('warehouses');
         }
 
+                function filterReturnWorkerOptions() {
+            const query = (document.getElementById('m-ret-worker-search')?.value || '').trim().toLowerCase();
+            const select = document.getElementById('m-ret-worker');
+            if (!select) return;
+
+            const normQuery = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
+            const options = Array.from(select.options);
+            let firstVisible = null;
+
+            options.forEach(opt => {
+                if (!opt.value) return;
+                const text = opt.textContent.toLowerCase();
+                const code = (opt.getAttribute('data-code') || '').toLowerCase();
+                const name = (opt.getAttribute('data-name') || '').toLowerCase();
+                const job = (opt.getAttribute('data-job') || '').toLowerCase();
+                const phone = (opt.getAttribute('data-phone') || '').toLowerCase();
+
+                const combined = `${code} ${name} ${job} ${phone} ${text}`;
+                const normCombined = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
+
+                if (!normQuery || normCombined.includes(normQuery)) {
+                    opt.style.display = '';
+                    if (!firstVisible) firstVisible = opt;
+                } else {
+                    opt.style.display = 'none';
+                }
+            });
+
+            if (firstVisible && select.selectedOptions[0]?.style.display === 'none') {
+                select.value = firstVisible.value;
+                loadModalReturnList();
+            }
+        }
+
+        function updateItemReturnSummary(itemId) {
+            const card = document.querySelector(`.m-ret-card[data-item-id="${itemId}"]`);
+            if (!card) return;
+            const total = Number(card.querySelector('.m-ret-orig-total').value);
+            const used = Number(card.querySelector('.m-ret-used').value) || 0;
+            const dam = Number(card.querySelector('.m-ret-dam').value) || 0;
+            const lost = Number(card.querySelector('.m-ret-lost').value) || 0;
+
+            const returnedSum = used + dam + lost;
+            const remaining = total - returnedSum;
+
+            const summaryEl = card.querySelector('.m-ret-summary');
+            if (summaryEl) {
+                if (returnedSum > total) {
+                    summaryEl.innerHTML = `<span style="color:var(--danger); font-weight:bold;">⚠️ خطأ: الإجمالي المرجع (${returnedSum}) أكبر من المسجل (${total})</span>`;
+                } else if (returnedSum === 0) {
+                    summaryEl.innerHTML = `<span style="color:var(--text-secondary);">لم يتم إرجاع أي كمية (تظل العهدة بالكامل: ${total} قطعة طرف العامل)</span>`;
+                } else if (remaining === 0) {
+                    summaryEl.innerHTML = `<span style="color:var(--success); font-weight:bold;">✅ تسوية وإرجاع كامل للعهدة (${total} قطعة)</span>`;
+                } else {
+                    summaryEl.innerHTML = `<span style="color:var(--primary); font-weight:bold;">🔄 تسوية جزئية: مرجع (${returnedSum}) • <span class="badge badge-warning" style="font-size:0.85rem;">متبقي بذمة العامل (${remaining} قطعة)</span></span>`;
+                }
+            }
+        }
+
         function openReturnModal(preTargetType = 'WORKER', preTargetId = null) {
             const workers = DB.get('Workers');
             const supervisors = DB.get('Supervisors');
@@ -6628,10 +6687,13 @@ function openAddStockModal(preWhId = null, preItemId = null) {
 
                 <!-- Worker Select -->
                 <div id="ret-container-worker" class="form-group" style="${preTargetType==='WORKER'?'':'display:none;'}">
-                    <label>${t('worker')} *</label>
+                    <label style="font-weight:bold;">${t('worker')} *</label>
+                    <div style="position:relative; margin-bottom:8px;">
+                        <input type="text" id="m-ret-worker-search" placeholder="🔍 ابحث باسم العامل، الكود، الوظيفة، أو رقم الهاتف..." oninput="filterReturnWorkerOptions()" style="background:var(--surface);">
+                    </div>
                     <select id="m-ret-worker" onchange="loadModalReturnList()">
                         <option value="">-- اختر العامل --</option>
-                        ${workers.map(w => `<option value="${w.id}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name} (${w.status})</option>`).join('')}
+                        ${workers.map(w => `<option value="${w.id}" data-name="${w.name}" data-code="${w.code}" data-job="${w.jobTitle||''}" data-phone="${w.mobile||''}" ${preTargetId&&Number(preTargetId)===Number(w.id)?'selected':''}>${w.code} - ${w.name} (${w.status==='Active'?'نشط':'مستقيل'})</option>`).join('')}
                     </select>
                 </div>
 
@@ -6709,17 +6771,29 @@ function openAddStockModal(preWhId = null, preItemId = null) {
                     hasItems = true;
                     const item = items.find(i => Number(i.id) === Number(itemId)) || { name: 'بند عهدة' };
                     html += `
-                        <div class="card" style="text-align:right; padding:12px; border:1px solid var(--border);">
-                            <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
-                                <strong>📦 ${item.name}</strong>
-                                <span class="badge badge-warning">العهدة المسجلة: ${c.total}</span>
+                        <div class="card m-ret-card" data-item-id="${itemId}" style="text-align:right; padding:14px; border:1px solid var(--border); margin-bottom:8px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                                <strong style="font-size:1.05rem; color:var(--primary);">📦 ${item.name}</strong>
+                                <span class="badge badge-warning" style="font-size:0.9rem; padding:4px 8px;">العهدة المسجلة: ${c.total} قطعة</span>
                             </div>
                             <input type="hidden" class="m-ret-item-id" value="${itemId}">
                             <input type="hidden" class="m-ret-orig-total" value="${c.total}">
-                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
-                                <div><label style="font-size:0.75rem; color:var(--secondary);">صالح (Used):</label><input type="number" class="m-ret-used" value="${c.total}" min="0" max="${c.total}"></div>
-                                <div><label style="font-size:0.75rem; color:var(--danger);">تالف:</label><input type="number" class="m-ret-dam" value="0" min="0" max="${c.total}"></div>
-                                <div><label style="font-size:0.75rem; color:var(--danger);">مفقود:</label><input type="number" class="m-ret-lost" value="0" min="0" max="${c.total}"></div>
+                            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+                                <div>
+                                    <label style="font-size:0.82rem; font-weight:bold; color:var(--secondary);">صالح للرد للمخزن:</label>
+                                    <input type="number" class="m-ret-used" value="${c.total}" min="0" max="${c.total}" oninput="updateItemReturnSummary(${itemId})" style="font-weight:bold; text-align:center;">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.82rem; font-weight:bold; color:var(--danger);">تالف (تخريد/تسوية):</label>
+                                    <input type="number" class="m-ret-dam" value="0" min="0" max="${c.total}" oninput="updateItemReturnSummary(${itemId})" style="font-weight:bold; text-align:center;">
+                                </div>
+                                <div>
+                                    <label style="font-size:0.82rem; font-weight:bold; color:var(--danger);">مفقود (عجز/غرامة):</label>
+                                    <input type="number" class="m-ret-lost" value="0" min="0" max="${c.total}" oninput="updateItemReturnSummary(${itemId})" style="font-weight:bold; text-align:center;">
+                                </div>
+                            </div>
+                            <div class="m-ret-summary" style="margin-top:10px; font-size:0.88rem; border-top:1px dashed var(--border); padding-top:6px;">
+                                <span style="color:var(--success); font-weight:bold;">✅ تسوية وإرجاع كامل للعهدة (${c.total} قطعة)</span>
                             </div>
                         </div>
                     `;
@@ -6758,20 +6832,33 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             }
 
             let error = null;
+            let totalReturnedAny = 0;
+            const custodyItems = DB.get('CustodyItems');
+
             cards.forEach(card => {
                 const itemId = Number(card.querySelector('.m-ret-item-id').value);
                 const total = Number(card.querySelector('.m-ret-orig-total').value);
                 const used = Number(card.querySelector('.m-ret-used').value) || 0;
                 const dam = Number(card.querySelector('.m-ret-dam').value) || 0;
                 const lost = Number(card.querySelector('.m-ret-lost').value) || 0;
+                const returnedSum = used + dam + lost;
 
-                if (used + dam + lost !== total) {
-                    error = `توزيع كميات الصنف رقم (${itemId}) غير متطابق مع الإجمالي (${total})`;
+                totalReturnedAny += returnedSum;
+
+                if (returnedSum > total) {
+                    const itmObj = custodyItems.find(i => Number(i.id) === itemId);
+                    const itemName = itmObj ? itmObj.name : `صنف #${itemId}`;
+                    error = `عفواً! مجموع الكمية المرتجعة للصنف (<strong>${itemName}</strong>) هي <strong>${returnedSum}</strong> قطعة وهي أكبر من إجمالي العهدة المسجلة (${total} قطعة)!`;
                 }
             });
 
             if (error) {
                 alertBox.innerHTML = `<div class="alert alert-danger">${error}</div>`;
+                return;
+            }
+
+            if (totalReturnedAny === 0) {
+                alertBox.innerHTML = `<div class="alert alert-danger">يرجى تحديد كمية مرتجعة أو تالفة أو مفقودة لصنف واحد على الأقل قبل الحفظ</div>`;
                 return;
             }
 
