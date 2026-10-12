@@ -5255,7 +5255,7 @@
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
                     <div class="form-group">
                         <label style="font-weight:bold;">المخزن المستلم *</label>
-                        <select id="purch-wh">
+                        <select id="purch-wh" onchange="updatePurchaseItemsForWarehouse()">
                             <option value="">-- اختر المخزن --</option>
                             ${warehouses.map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('')}
                         </select>
@@ -5263,9 +5263,10 @@
                     <div class="form-group">
                         <label style="font-weight:bold;">الصنف *</label>
                         <select id="purch-item">
-                            <option value="">-- اختر الصنف --</option>
-                            ${items.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('')}
+                            <option value="">-- اختر الصنف أولاً اختر المخزن --</option>
+                            ${items.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('')}
                         </select>
+                        <div id="purch-item-hint" style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">💡 اختر المخزن أولاً لعرض أصنافه فقط</div>
                     </div>
                 </div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
@@ -5290,6 +5291,59 @@
                     <button class="btn btn-primary" onclick="savePurchaseEntry()">💾 حفظ وتوريد للمخزن</button>
                 </div>
             `);
+        }
+
+        function updatePurchaseItemsForWarehouse() {
+            const whId = Number(document.getElementById('purch-wh')?.value);
+            const itemSelect = document.getElementById('purch-item');
+            const hintEl = document.getElementById('purch-item-hint');
+            if (!itemSelect) return;
+
+            const allItems = DB.get('CustodyItems').filter(i => i.status === 'Active');
+
+            if (!whId) {
+                // No warehouse selected: show all items
+                itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
+                    allItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                if (hintEl) hintEl.innerHTML = '💡 اختر المخزن أولاً لعرض أصنافه فقط';
+                return;
+            }
+
+            // Get items that have ever been stocked in this warehouse
+            const txs = DB.get('Transactions').filter(t =>
+                Number(t.warehouseId) === whId && t.type === 'STOCK_IN'
+            );
+            const warehouseItemIds = new Set(txs.map(t => Number(t.itemId)));
+
+            let filteredItems;
+            let hintMsg;
+
+            if (warehouseItemIds.size > 0) {
+                // Show items that belong to this warehouse first, then the rest
+                const warehouseItems = allItems.filter(i => warehouseItemIds.has(Number(i.id)));
+                const otherItems = allItems.filter(i => !warehouseItemIds.has(Number(i.id)));
+
+                let html = `<option value="">-- اختر الصنف --</option>`;
+                if (warehouseItems.length > 0) {
+                    html += `<optgroup label="📦 أصناف هذا المخزن (${warehouseItems.length})">` +
+                        warehouseItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('') +
+                        `</optgroup>`;
+                }
+                if (otherItems.length > 0) {
+                    html += `<optgroup label="── أصناف أخرى (${otherItems.length}) ──">` +
+                        otherItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('') +
+                        `</optgroup>`;
+                }
+                itemSelect.innerHTML = html;
+                hintMsg = `✅ يعرض ${warehouseItems.length} صنف مرتبط بهذا المخزن أولاً`;
+            } else {
+                // New warehouse with no items yet - show all items
+                itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
+                    allItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                hintMsg = '📋 مخزن جديد - يعرض جميع الأصناف المتاحة';
+            }
+
+            if (hintEl) hintEl.innerHTML = hintMsg;
         }
 
         function savePurchaseEntry() {
