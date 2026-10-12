@@ -740,6 +740,7 @@
             <li class="nav-item" data-view="supervisors"><span class="nav-icon">👔</span> <span>الإداريين</span></li>
             <li class="nav-item" data-view="housing"><span class="nav-icon">🏠</span> <span>السكن</span></li>
             <li class="nav-item" data-view="factories"><span class="nav-icon">🏭</span> <span>المصانع</span></li>
+            <li class="nav-item" data-view="purchases"><span class="nav-icon">🛒</span> <span>المشتريات</span></li>
             <li class="nav-item" data-view="warehouses"><span class="nav-icon">🏢</span> <span>المخازن والعهد</span></li>
             <li class="nav-item" data-view="reports"><span class="nav-icon">📄</span> <span>التقارير</span></li>
             <li class="nav-item" data-view="audit"><span class="nav-icon">📜</span> <span>سجل التدقيق</span></li>
@@ -837,8 +838,11 @@
         const i18n = {
             ar: {
                 // Navigation
-                dashboard: 'لوحة التحكم', workers: 'العمال', supervisors: 'الإداريين', housing: 'السكن', factories: 'المصانع', warehouses: 'المخازن والعهد',
+                dashboard: 'لوحة التحكم', workers: 'العمال', supervisors: 'الإداريين', housing: 'السكن', factories: 'المصانع', purchases: 'المشتريات', warehouses: 'المخازن والعهد',
                 reports: 'التقارير', audit: 'سجل التدقيق', settings: 'إعدادات النظام',
+                // Purchases
+                purchases: 'المشتريات', add_purchase: '➕ إضافة مشتريات جديدة', supplier: 'المورد',
+                purchases_log: 'سجل المشتريات', cancel_purchase: '↩️ إلغاء الحركة',
                 // Categories
                 cat_employee: 'عهد موظفين (ملابس وأدوات)', cat_admin: 'عهد إدارية ومكتبية', cat_housing: 'عهد سكن وتجهيزات',
                 category: 'التصنيف', supervisor: 'الإداري', building: 'العمارة', apartment: 'الشقة',
@@ -916,8 +920,11 @@
             },
             en: {
                 // Navigation
-                dashboard: 'Dashboard', workers: 'Workers', supervisors: 'Supervisors', housing: 'Housing', factories: 'Factories', warehouses: 'Warehouses & Custody',
+                dashboard: 'Dashboard', workers: 'Workers', supervisors: 'Supervisors', housing: 'Housing', factories: 'Factories', purchases: 'Purchases', warehouses: 'Warehouses & Custody',
                 reports: 'Reports', audit: 'Audit Log', settings: 'System Settings',
+                // Purchases
+                purchases: 'Purchases', add_purchase: '➕ Add New Purchase', supplier: 'Supplier',
+                purchases_log: 'Purchases Log', cancel_purchase: '↩️ Cancel Entry',
                 // Categories
                 cat_employee: 'Employee Custody (Uniforms & Tools)', cat_admin: 'Admin & Office Custody', cat_housing: 'Housing & Furniture Custody',
                 category: 'Category', supervisor: 'Supervisor', building: 'Building', apartment: 'Apartment',
@@ -1080,7 +1087,7 @@
                     }
 
                     // حماية بيانات الجهاز: إذا كانت البيانات موجودة في اللابتوب وغير موجودة في Firebase، يتم رفعها تلقائياً للسحابة
-                    const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs'];
+                    const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs', 'Purchases'];
                     collections.forEach(col => {
                         const localData = this.get(col);
                         const remoteData = data ? data[col] : null;
@@ -1139,7 +1146,7 @@
                 if (!silent) alert('يرجى تسجيل الدخول أولاً للمزامنة السحابية.');
                 return;
             }
-            const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs', 'CompanySettings'];
+            const collections = ['Workers', 'Supervisors', 'Housing', 'Factories', 'Warehouses', 'CustodyItems', 'Transactions', 'AuditLogs', 'Purchases', 'CompanySettings'];
             let count = 0;
             collections.forEach(col => {
                 const data = DB.get(col);
@@ -1613,6 +1620,7 @@
             factories: () => renderFactoriesView(currentFilterState.selectedFactoryId),
             warehouses: () => renderWarehousesView(currentFilterState.selectedWarehouseId),
             reports: renderReportsView,
+            purchases: renderPurchasesView,
             audit: renderAuditView,
             settings: renderSettingsView
         };
@@ -2192,7 +2200,6 @@
                         <button class="view-toggle-btn ${viewMode==='list'?'active':''}" onclick="renderWarehousesViewMode('list')">${t('view_mode_list')}</button>
                         <button class="btn btn-primary" onclick="openWarehouseAddModal()">${t('add_warehouse')}</button>
                         <button class="btn" onclick="openAllItemsManageModal()">${t('manage_items')}</button>
-                        <button class="btn btn-success" onclick="openAddStockModal()">${t('add_stock_btn')}</button>
                         <button class="btn" onclick="openIssueModal()">${t('issue_btn')}</button>
                         <button class="btn" onclick="openReturnModal()">${t('return_custody')}</button>
                         <button class="btn btn-danger" onclick="openScrapModal()">🔥 إعدام مخزون</button>
@@ -2245,7 +2252,6 @@
                             <div style="display:flex; gap:6px; flex-wrap:wrap;">
                                 <button class="btn btn-sm btn-primary" onclick="openCustodyItemEditModal(${i.id}, ${wh.id})">✏️ تعديل</button>
                                 <button class="btn btn-sm btn-danger" onclick="deleteCustodyItem(${i.id}, ${wh.id})">🗑️ حذف</button>
-                                <button class="btn btn-sm btn-success" onclick="openQuickAddStockModal(${wh.id}, ${i.id})">+ توريد</button>
                                 <button class="btn btn-sm btn-danger" onclick="openScrapModal(${wh.id}, ${i.id})" title="إعدام وتخريد كمية من هذا الصنف">🔥 إعدام</button>
                             </div>
                         </td>
@@ -2293,7 +2299,6 @@
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="openCustodyItemAddModal(${wh.id})">➕ إضافة منتج جديد</button>
-                        <button class="btn btn-success" onclick="openAddStockModalForWh(${wh.id})">📥 توريد كمية لهذا المخزن</button>
                         <button class="btn" onclick="openIssueModalForWh(${wh.id})">📤 صرف من هذا المخزن</button>
                         <button class="btn btn-danger" onclick="openScrapModal(${wh.id})">🔥 إعدام من هذا المخزن</button>
                         <button class="btn" onclick="openWarehouseEditModal(${wh.id})">✏️ تعديل المخزن</button>
@@ -5067,6 +5072,344 @@
 
                 r.style.display = (textMatch && modMatch && actMatch) ? '' : 'none';
             });
+        }
+
+
+        // ==========================================
+        // 7.X PURCHASES VIEW (سجل المشتريات)
+        // ==========================================
+
+        function renderPurchasesView() {
+            const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            const purchases = DB.get('Purchases').slice().reverse();
+
+            // Build filter options
+            const itemOptions = items.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+            const whOptions = warehouses.map(w => `<option value="${w.id}">${w.name}</option>`).join('');
+
+            // Render rows
+            let rows = purchases.map((p, idx) => {
+                const wh = warehouses.find(w => Number(w.id) === Number(p.warehouseId));
+                const itm = items.find(i => Number(i.id) === Number(p.itemId));
+                const whName = wh ? wh.name : `مخزن #${p.warehouseId}`;
+                const itmName = itm ? itm.name : `صنف #${p.itemId}`;
+                const condLabel = p.condition === 'NEW' ? 'جديد' : 'مستعمل صالح';
+                const isRev = !!p.reversed;
+
+                return `
+                    <tr data-purch-id="${p.id}"
+                        data-item-id="${p.itemId}"
+                        data-wh-id="${p.warehouseId}"
+                        data-supplier="${(p.supplier||'').toLowerCase()}"
+                        data-date="${p.date||''}"
+                        class="${isRev ? 'audit-reversed' : ''}"
+                        style="${isRev ? 'background:rgba(239,68,68,0.06);' : ''}">
+                        <td><strong>${purchases.length - idx}</strong></td>
+                        <td style="white-space:nowrap;">${p.date || '-'}</td>
+                        <td><strong>${p.supplier || '-'}</strong></td>
+                        <td>${whName}</td>
+                        <td><strong>${itmName}</strong></td>
+                        <td><strong style="color:var(--primary); font-size:1.1rem;">${p.quantity}</strong></td>
+                        <td><span class="badge ${p.condition==='NEW'?'badge-success':'badge-primary'}">${condLabel}</span></td>
+                        <td>${p.operator || '-'}</td>
+                        <td style="max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${p.notes||''}">${p.notes || '-'}</td>
+                        <td>
+                            ${isRev
+                                ? `<span class="badge badge-danger" style="font-size:0.85rem;">↩️ مُلغى</span>`
+                                : `<button class="btn btn-sm btn-danger" onclick="cancelPurchaseEntry(${p.id})">↩️ إلغاء الحركة</button>`
+                            }
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            const today = new Date().toISOString().split('T')[0];
+            const monthStart = today.substring(0,8) + '01';
+
+            return `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-wrap:wrap; gap:10px;">
+                    <div>
+                        <h2 style="color:var(--primary); margin-bottom:4px;">🛒 سجل المشتريات وتوريد المخازن</h2>
+                        <p style="color:var(--text-secondary); font-size:0.9rem;">من هنا يتم تسجيل جميع عمليات توريد الأصناف إلى المخازن، مع إمكانية الإلغاء وإعادة الرصيد تلقائياً.</p>
+                    </div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                        <button class="btn btn-primary" onclick="openAddPurchaseModal()">➕ إضافة مشتريات جديدة</button>
+                        <button class="btn" onclick="printReport('سجل المشتريات')">🖨️ طباعة السجل</button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:14px 18px; margin-bottom:18px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+                    <div class="form-group" style="margin:0; flex:1; min-width:160px;">
+                        <label style="font-size:0.85rem; margin-bottom:4px; display:block;">🔍 المورد</label>
+                        <input type="text" id="purch-filter-supplier" placeholder="اكتب اسم المورد..." oninput="filterPurchasesTable()" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); width:100%;">
+                    </div>
+                    <div class="form-group" style="margin:0; min-width:150px;">
+                        <label style="font-size:0.85rem; margin-bottom:4px; display:block;">📦 الصنف</label>
+                        <select id="purch-filter-item" onchange="filterPurchasesTable()" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); width:100%;">
+                            <option value="">كل الأصناف</option>
+                            ${itemOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0; min-width:150px;">
+                        <label style="font-size:0.85rem; margin-bottom:4px; display:block;">🏢 المخزن</label>
+                        <select id="purch-filter-wh" onchange="filterPurchasesTable()" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text); width:100%;">
+                            <option value="">كل المخازن</option>
+                            ${whOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0; min-width:130px;">
+                        <label style="font-size:0.85rem; margin-bottom:4px; display:block;">📅 من تاريخ</label>
+                        <input type="date" id="purch-filter-from" value="${monthStart}" onchange="filterPurchasesTable()" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+                    </div>
+                    <div class="form-group" style="margin:0; min-width:130px;">
+                        <label style="font-size:0.85rem; margin-bottom:4px; display:block;">📅 إلى تاريخ</label>
+                        <input type="date" id="purch-filter-to" value="${today}" onchange="filterPurchasesTable()" style="padding:7px 10px; border-radius:8px; border:1px solid var(--border); background:var(--bg); color:var(--text);">
+                    </div>
+                    <button class="btn" onclick="resetPurchasesFilters()" style="white-space:nowrap;">🔄 إعادة ضبط</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="purchases-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>التاريخ</th>
+                                <th>المورد</th>
+                                <th>المخزن</th>
+                                <th>الصنف</th>
+                                <th>الكمية</th>
+                                <th>الحالة</th>
+                                <th>المسؤول</th>
+                                <th>ملاحظات</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="purchases-tbody">
+                            ${rows || '<tr><td colspan="10" style="text-align:center; color:var(--text-secondary);">لا توجد مشتريات مسجلة حتى الآن. اضغط "إضافة مشتريات جديدة" للبدء.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function filterPurchasesTable() {
+            const supFilter = (document.getElementById('purch-filter-supplier')?.value || '').trim().toLowerCase();
+            const itemFilter = document.getElementById('purch-filter-item')?.value || '';
+            const whFilter = document.getElementById('purch-filter-wh')?.value || '';
+            const fromDate = document.getElementById('purch-filter-from')?.value || '';
+            const toDate = document.getElementById('purch-filter-to')?.value || '';
+
+            const rows = document.querySelectorAll('#purchases-tbody tr[data-purch-id]');
+            rows.forEach(row => {
+                const supplier = row.getAttribute('data-supplier') || '';
+                const itemId = row.getAttribute('data-item-id') || '';
+                const whId = row.getAttribute('data-wh-id') || '';
+                const date = row.getAttribute('data-date') || '';
+
+                const matchSup = !supFilter || supplier.includes(supFilter);
+                const matchItem = !itemFilter || itemId === itemFilter;
+                const matchWh = !whFilter || whId === whFilter;
+                const matchFrom = !fromDate || date >= fromDate;
+                const matchTo = !toDate || date <= toDate;
+
+                row.style.display = (matchSup && matchItem && matchWh && matchFrom && matchTo) ? '' : 'none';
+            });
+        }
+
+        function resetPurchasesFilters() {
+            const today = new Date().toISOString().split('T')[0];
+            const monthStart = today.substring(0,8) + '01';
+            const sup = document.getElementById('purch-filter-supplier');
+            const item = document.getElementById('purch-filter-item');
+            const wh = document.getElementById('purch-filter-wh');
+            const from = document.getElementById('purch-filter-from');
+            const to = document.getElementById('purch-filter-to');
+            if (sup) sup.value = '';
+            if (item) item.value = '';
+            if (wh) wh.value = '';
+            if (from) from.value = monthStart;
+            if (to) to.value = today;
+            filterPurchasesTable();
+        }
+
+        function openAddPurchaseModal() {
+            const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const items = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            const today = new Date().toISOString().split('T')[0];
+
+            openModal(`
+                <div class="modal-header"><h3>🛒 إضافة مشتريات جديدة</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div id="m-purch-alert"></div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div class="form-group">
+                        <label style="font-weight:bold;">المورد *</label>
+                        <input type="text" id="purch-supplier" placeholder="اسم المورد أو الشركة..." autocomplete="off">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">${t('date')} *</label>
+                        <input type="date" id="purch-date" value="${today}">
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div class="form-group">
+                        <label style="font-weight:bold;">المخزن المستلم *</label>
+                        <select id="purch-wh">
+                            <option value="">-- اختر المخزن --</option>
+                            ${warehouses.map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">الصنف *</label>
+                        <select id="purch-item">
+                            <option value="">-- اختر الصنف --</option>
+                            ${items.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('')}
+                        </select>
+                    </div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div class="form-group">
+                        <label style="font-weight:bold;">الكمية *</label>
+                        <input type="number" id="purch-qty" placeholder="أدخل الكمية المُوردة" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">${t('condition')} *</label>
+                        <select id="purch-cond">
+                            <option value="NEW">جديد (NEW)</option>
+                            <option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>${t('notes')}</label>
+                    <textarea id="purch-notes" placeholder="ملاحظات على أمر التوريد (اختياري)..." rows="2"></textarea>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:15px;">
+                    <button class="btn" onclick="closeModal()">${t('cancel')}</button>
+                    <button class="btn btn-primary" onclick="savePurchaseEntry()">💾 حفظ وتوريد للمخزن</button>
+                </div>
+            `);
+        }
+
+        function savePurchaseEntry() {
+            const supplier = document.getElementById('purch-supplier')?.value.trim();
+            const whId = Number(document.getElementById('purch-wh')?.value);
+            const itemId = Number(document.getElementById('purch-item')?.value);
+            const qty = Number(document.getElementById('purch-qty')?.value);
+            const cond = document.getElementById('purch-cond')?.value;
+            const date = document.getElementById('purch-date')?.value;
+            const notes = document.getElementById('purch-notes')?.value.trim();
+            const op = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
+
+            const alertEl = document.getElementById('m-purch-alert');
+            function showErr(msg) {
+                if (alertEl) alertEl.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+            }
+
+            if (!supplier) { showErr('يرجى كتابة اسم المورد'); return; }
+            if (!whId) { showErr('يرجى اختيار المخزن'); return; }
+            if (!itemId) { showErr('يرجى اختيار الصنف'); return; }
+            if (!qty || qty <= 0) { showErr('يرجى كتابة كمية صحيحة أكبر من صفر'); return; }
+
+            // 1. Create purchase record
+            const purchases = DB.get('Purchases');
+            const newPurch = {
+                id: DB.nextId('Purchases'),
+                date: date || new Date().toISOString().split('T')[0],
+                supplier: supplier,
+                warehouseId: whId,
+                itemId: itemId,
+                quantity: qty,
+                condition: cond,
+                operator: op,
+                notes: notes,
+                reversed: false,
+                txId: null
+            };
+
+            // 2. Create STOCK_IN transaction linked to this purchase
+            const txs = DB.get('Transactions');
+            const newTx = {
+                id: DB.nextId('Transactions'),
+                date: newPurch.date,
+                type: 'STOCK_IN',
+                warehouseId: whId,
+                workerId: null,
+                itemId: itemId,
+                quantity: qty,
+                condition: cond,
+                operator: op,
+                notes: `[مشتريات #${newPurch.id}] ${supplier}${notes ? ' | ' + notes : ''}`,
+                purchaseId: newPurch.id
+            };
+            txs.push(newTx);
+            DB.set('Transactions', txs);
+
+            // 3. Save purchase with txId reference
+            newPurch.txId = newTx.id;
+            purchases.push(newPurch);
+            DB.set('Purchases', purchases);
+
+            // 4. Log audit
+            const whName = DB.get('Warehouses').find(w => Number(w.id) === Number(whId))?.name || `مخزن #${whId}`;
+            const itmName = DB.get('CustodyItems').find(i => Number(i.id) === Number(itemId))?.name || `صنف #${itemId}`;
+            logAudit('Purchases', 'ADD_PURCHASE', newPurch.id, null, newPurch, `توريد ${qty} قطعة ${itmName} من مورد "${supplier}" لمخزن ${whName}`);
+
+            closeModal();
+            alert(`✅ تم تسجيل المشتريات وتوريد ${qty} قطعة "${itmName}" لمخزن "${whName}" بنجاح!`);
+            navigate('purchases');
+        }
+
+        function cancelPurchaseEntry(purchId) {
+            if (!confirm('هل أنت متأكد من إلغاء هذه الحركة؟ سيتم خصم الكمية من رصيد المخزن تلقائياً.')) return;
+
+            const purchases = DB.get('Purchases');
+            const idx = purchases.findIndex(p => Number(p.id) === Number(purchId));
+            if (idx === -1) { alert('لم يتم العثور على سجل المشتريات!'); return; }
+
+            const purch = purchases[idx];
+            if (purch.reversed) { alert('هذه الحركة ملغاة بالفعل.'); return; }
+
+            // 1. Mark purchase as reversed
+            purchases[idx].reversed = true;
+            DB.set('Purchases', purchases);
+
+            // 2. Add a REVERSAL transaction to deduct from warehouse
+            if (purch.txId) {
+                const txs = DB.get('Transactions');
+                const origTx = txs.find(t => Number(t.id) === Number(purch.txId));
+                if (origTx) {
+                    const revTx = {
+                        id: DB.nextId('Transactions'),
+                        date: new Date().toISOString().split('T')[0],
+                        type: 'REVERSAL',
+                        warehouseId: purch.warehouseId,
+                        workerId: null,
+                        itemId: purch.itemId,
+                        quantity: purch.quantity,
+                        condition: purch.condition,
+                        operator: document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System',
+                        notes: `إلغاء توريد مشتريات #${purchId} - مورد: ${purch.supplier}`,
+                        reversedTxId: purch.txId,
+                        purchaseId: purchId
+                    };
+                    txs.push(revTx);
+
+                    // Mark original tx as reversed too
+                    const origIdx = txs.findIndex(t => Number(t.id) === Number(purch.txId));
+                    if (origIdx !== -1) txs[origIdx].reversed = true;
+                    DB.set('Transactions', txs);
+                }
+            }
+
+            // 3. Log audit
+            const whName = DB.get('Warehouses').find(w => Number(w.id) === Number(purch.warehouseId))?.name || `مخزن #${purch.warehouseId}`;
+            const itmName = DB.get('CustodyItems').find(i => Number(i.id) === Number(purch.itemId))?.name || `صنف #${purch.itemId}`;
+            logAudit('Purchases', 'CANCEL_PURCHASE', purchId, purch, purchases[idx], `إلغاء توريد ${purch.quantity} قطعة ${itmName} من مورد "${purch.supplier}" لمخزن ${whName}`);
+
+            alert(`✅ تم إلغاء حركة التوريد وخصم ${purch.quantity} قطعة من رصيد "${whName}" بنجاح.`);
+            navigate('purchases');
         }
 
         function renderAuditView() {
