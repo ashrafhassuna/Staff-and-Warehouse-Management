@@ -7764,55 +7764,25 @@ function openAddStockModal(preWhId = null, preItemId = null) {
 
         function printReport(title) {
             const company = DB.getOne('CompanySettings') || {};
-            const simpleHeaderTitles = ['سجل المشتريات'];
-            const isSimple = simpleHeaderTitles.includes(title);
+            
+            // Side A: Company Name & details
+            document.getElementById('print-company-name').textContent = company.name || 'نظام إدارة العهد';
+            
+            let detailsHtml = '';
+            if (company.phone) detailsHtml += `📞 ${company.phone} | `;
+            if (company.address) detailsHtml += `📍 ${company.address}<br>`;
+            if (company.commercialReg) detailsHtml += `📋 س.ت: ${company.commercialReg} | `;
+            if (company.taxCard) detailsHtml += `🏛️ ب.ض: ${company.taxCard} | `;
+            if (company.email) detailsHtml += `✉️ ${company.email}`;
+            document.getElementById('print-company-details').innerHTML = detailsHtml;
 
-            const printHeaderRow = document.querySelector('#print-header > div:first-child');
-            const sigFooter = document.getElementById('print-signatures-footer');
-
-            if (isSimple) {
-                if (printHeaderRow) printHeaderRow.style.display = 'none';
-                if (sigFooter) sigFooter.style.display = 'none';
-                document.getElementById('print-company-name').textContent = '';
-                document.getElementById('print-company-details').innerHTML = '';
-                const logoContainer = document.getElementById('print-logo-container');
-                if (logoContainer) logoContainer.innerHTML = '';
+            // Side B: Company Logo
+            const logoContainer = document.getElementById('print-logo-container');
+            if (company.logo) {
+                logoContainer.innerHTML = `<img src="${company.logo}" style="max-height:85px; max-width:220px; object-fit:contain;">`;
             } else {
-                if (printHeaderRow) printHeaderRow.style.display = '';
-                if (sigFooter) sigFooter.style.display = '';
-                document.getElementById('print-company-name').textContent = company.name || 'نظام إدارة العهد';
-                let detailsHtml = '';
-                if (company.phone) detailsHtml += `📞 ${company.phone} | `;
-                if (company.address) detailsHtml += `📍 ${company.address}<br>`;
-                if (company.commercialReg) detailsHtml += `📋 س.ت: ${company.commercialReg} | `;
-                if (company.taxCard) detailsHtml += `🏛️ ب.ض: ${company.taxCard} | `;
-                if (company.email) detailsHtml += `✉️ ${company.email}`;
-                document.getElementById('print-company-details').innerHTML = detailsHtml;
-                const logoContainer = document.getElementById('print-logo-container');
-                if (company.logo) {
-                    logoContainer.innerHTML = `<img src="${company.logo}" style="max-height:85px; max-width:220px; object-fit:contain;">`;
-                } else {
-                    logoContainer.innerHTML = '';
-                }
+                logoContainer.innerHTML = '';
             }
-
-            let displayTitle = title || 'تقرير رسمـي';
-            if (displayTitle === 'العمال' || displayTitle === 'Workers' || displayTitle === (typeof t === 'function' ? t('workers') : 'العمال')) {
-                displayTitle = 'تقرير كشف بيانات وحالات العماّل والعهد المسلمة';
-            }
-            document.getElementById('print-report-title').textContent = displayTitle;
-            const now = new Date();
-            const dateStr = now.toLocaleDateString('ar-EG', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
-            const timeStr = now.toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit' });
-            document.getElementById('print-date').textContent = `تاريخ إصدار التقرير: ${dateStr} - ${timeStr}`;
-
-            window.print();
-
-            if (isSimple) {
-                if (printHeaderRow) printHeaderRow.style.display = '';
-                if (sigFooter) sigFooter.style.display = '';
-            }
-        }
 
             // Executive Report Title Formatting
             let displayTitle = title || 'تقرير رسمـي';
