@@ -5302,9 +5302,8 @@
             const allItems = DB.get('CustodyItems').filter(i => i.status === 'Active');
 
             if (!whId) {
-                // No warehouse selected: show all items
-                itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
-                    allItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                // No warehouse selected
+                itemSelect.innerHTML = `<option value="">-- اختر المخزن أولاً --</option>`;
                 if (hintEl) hintEl.innerHTML = '💡 اختر المخزن أولاً لعرض أصنافه فقط';
                 return;
             }
@@ -5315,35 +5314,18 @@
             );
             const warehouseItemIds = new Set(txs.map(t => Number(t.itemId)));
 
-            let filteredItems;
-            let hintMsg;
-
             if (warehouseItemIds.size > 0) {
-                // Show items that belong to this warehouse first, then the rest
+                // Show ONLY items that belong to this warehouse
                 const warehouseItems = allItems.filter(i => warehouseItemIds.has(Number(i.id)));
-                const otherItems = allItems.filter(i => !warehouseItemIds.has(Number(i.id)));
-
-                let html = `<option value="">-- اختر الصنف --</option>`;
-                if (warehouseItems.length > 0) {
-                    html += `<optgroup label="📦 أصناف هذا المخزن (${warehouseItems.length})">` +
-                        warehouseItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('') +
-                        `</optgroup>`;
-                }
-                if (otherItems.length > 0) {
-                    html += `<optgroup label="── أصناف أخرى (${otherItems.length}) ──">` +
-                        otherItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('') +
-                        `</optgroup>`;
-                }
-                itemSelect.innerHTML = html;
-                hintMsg = `✅ يعرض ${warehouseItems.length} صنف مرتبط بهذا المخزن أولاً`;
+                itemSelect.innerHTML = `<option value="">-- اختر الصنف (${warehouseItems.length} صنف) --</option>` +
+                    warehouseItems.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                if (hintEl) hintEl.innerHTML = `✅ ${warehouseItems.length} صنف مسجل في هذا المخزن`;
             } else {
-                // New warehouse with no items yet - show all items
+                // New warehouse with no stock history - show all items for first stocking
                 itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
-                    allItems.map(i => `<option value="${i.id}" data-item-id="${i.id}">${i.name} (${i.code||''})</option>`).join('');
-                hintMsg = '📋 مخزن جديد - يعرض جميع الأصناف المتاحة';
+                    allItems.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                if (hintEl) hintEl.innerHTML = '📋 مخزن جديد - يعرض جميع الأصناف لأول توريد';
             }
-
-            if (hintEl) hintEl.innerHTML = hintMsg;
         }
 
         function savePurchaseEntry() {
