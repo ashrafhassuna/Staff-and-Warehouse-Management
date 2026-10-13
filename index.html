@@ -741,6 +741,7 @@
             <li class="nav-item" data-view="housing"><span class="nav-icon">🏠</span> <span>السكن</span></li>
             <li class="nav-item" data-view="factories"><span class="nav-icon">🏭</span> <span>المصانع</span></li>
             <li class="nav-item" data-view="purchases"><span class="nav-icon">🛒</span> <span>المشتريات</span></li>
+            <li class="nav-item" data-view="issuance"><span class="nav-icon">📤</span> <span>صرف العهد</span></li>
             <li class="nav-item" data-view="warehouses"><span class="nav-icon">🏢</span> <span>المخازن والعهد</span></li>
             <li class="nav-item" data-view="reports"><span class="nav-icon">📄</span> <span>التقارير</span></li>
             <li class="nav-item" data-view="audit"><span class="nav-icon">📜</span> <span>سجل التدقيق</span></li>
@@ -842,6 +843,7 @@
                 reports: 'التقارير', audit: 'سجل التدقيق', settings: 'إعدادات النظام',
                 // Purchases
                 purchases: 'المشتريات', add_purchase: '➕ إضافة مشتريات جديدة', supplier: 'المورد',
+                issuance: 'صرف العهد',
                 purchases_log: 'سجل المشتريات', cancel_purchase: '↩️ إلغاء الحركة',
                 // Categories
                 cat_employee: 'عهد موظفين (ملابس وأدوات)', cat_admin: 'عهد إدارية ومكتبية', cat_housing: 'عهد سكن وتجهيزات',
@@ -924,6 +926,7 @@
                 reports: 'Reports', audit: 'Audit Log', settings: 'System Settings',
                 // Purchases
                 purchases: 'Purchases', add_purchase: '➕ Add New Purchase', supplier: 'Supplier',
+                issuance: 'Issuance Log',
                 purchases_log: 'Purchases Log', cancel_purchase: '↩️ Cancel Entry',
                 // Categories
                 cat_employee: 'Employee Custody (Uniforms & Tools)', cat_admin: 'Admin & Office Custody', cat_housing: 'Housing & Furniture Custody',
@@ -1621,6 +1624,7 @@
             warehouses: () => renderWarehousesView(currentFilterState.selectedWarehouseId),
             reports: renderReportsView,
             purchases: renderPurchasesView,
+            issuance: renderIssuanceView,
             audit: renderAuditView,
             settings: renderSettingsView
         };
@@ -2200,7 +2204,6 @@
                         <button class="view-toggle-btn ${viewMode==='list'?'active':''}" onclick="renderWarehousesViewMode('list')">${t('view_mode_list')}</button>
                         <button class="btn btn-primary" onclick="openWarehouseAddModal()">${t('add_warehouse')}</button>
                         <button class="btn" onclick="openAllItemsManageModal()">${t('manage_items')}</button>
-                        <button class="btn" onclick="openIssueModal()">${t('issue_btn')}</button>
                         <button class="btn" onclick="openReturnModal()">${t('return_custody')}</button>
                         <button class="btn btn-danger" onclick="openScrapModal()">🔥 إعدام مخزون</button>
                     </div>
@@ -2299,7 +2302,6 @@
                     </div>
                     <div style="display:flex; gap:8px; flex-wrap:wrap;">
                         <button class="btn btn-primary" onclick="openCustodyItemAddModal(${wh.id})">➕ إضافة منتج جديد</button>
-                        <button class="btn" onclick="openIssueModalForWh(${wh.id})">📤 صرف من هذا المخزن</button>
                         <button class="btn btn-danger" onclick="openScrapModal(${wh.id})">🔥 إعدام من هذا المخزن</button>
                         <button class="btn" onclick="openWarehouseEditModal(${wh.id})">✏️ تعديل المخزن</button>
                         <button class="btn btn-danger" onclick="deleteWarehouse(${wh.id})">🗑️ حذف هذا المخزن</button>
@@ -5447,6 +5449,403 @@
             alert(`✅ تم إلغاء حركة التوريد وخصم ${purch.quantity} قطعة من رصيد "${whName}" بنجاح.`);
             navigate('purchases');
         }
+
+
+        // ==========================================
+        // 7.Y ISSUANCE VIEW (صرف العهد)
+        // ==========================================
+
+        function renderIssuanceView() {
+            const workers  = DB.get('Workers');
+            const factories = DB.get('Factories');
+            const items    = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const txs      = DB.get('Transactions').filter(t => t.type === 'ISSUE' && t.targetType === 'WORKER').slice().reverse();
+
+            const itemOptions = items.map(i => `<option value="${i.id}">${i.name}</option>`).join('');
+            const workerOptions = workers.map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('');
+            const factoryOptions = factories.map(f => `<option value="${f.id}">${f.name}</option>`).join('');
+
+            const today = new Date().toISOString().split('T')[0];
+            const monthStart = today.substring(0, 8) + '01';
+
+            let rows = txs.map((tx, idx) => {
+                const worker  = workers.find(w => Number(w.id) === Number(tx.workerId));
+                const item    = items.find(i => Number(i.id) === Number(tx.itemId));
+                const factory = worker ? factories.find(f => Number(f.id) === Number(worker.factoryId)) : null;
+                const wh      = warehouses.find(w => Number(w.id) === Number(tx.warehouseId));
+                const isRev   = !!tx.reversed;
+                const condLabel = tx.condition === 'NEW' ? 'جديد' : 'مستعمل صالح';
+
+                return `
+                    <tr data-tx-id="${tx.id}"
+                        data-worker-id="${tx.workerId || ''}"
+                        data-item-id="${tx.itemId || ''}"
+                        data-factory-id="${worker ? (worker.factoryId || '') : ''}"
+                        data-date="${tx.date || ''}"
+                        class="${isRev ? 'audit-reversed' : ''}"
+                        style="${isRev ? 'background:rgba(239,68,68,0.06);' : ''}">
+                        <td><strong>${txs.length - idx}</strong></td>
+                        <td style="white-space:nowrap;">${tx.date || '-'}</td>
+                        <td><strong>${worker ? worker.name : '-'}</strong><br><span style="font-size:0.8rem;color:var(--text-secondary);">${worker ? (worker.code || '') : ''}</span></td>
+                        <td>${factory ? factory.name : '-'}</td>
+                        <td>${wh ? wh.name : '-'}</td>
+                        <td><strong>${item ? item.name : '-'}</strong></td>
+                        <td><strong style="color:var(--primary);font-size:1.1rem;">${tx.quantity}</strong></td>
+                        <td><span class="badge ${tx.condition === 'NEW' ? 'badge-success' : 'badge-primary'}">${condLabel}</span></td>
+                        <td>${tx.operator || '-'}</td>
+                        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${tx.notes||''}">${tx.notes || '-'}</td>
+                        <td>
+                            ${isRev
+                                ? `<span class="badge badge-danger" style="font-size:0.85rem;">↩️ مُلغى</span>`
+                                : `<button class="btn btn-sm btn-danger" onclick="cancelIssuanceEntry(${tx.id})">↩️ إلغاء</button>`
+                            }
+                        </td>
+                    </tr>`;
+            }).join('');
+
+            return `
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;flex-wrap:wrap;gap:10px;">
+                    <div>
+                        <h2 style="color:var(--primary);margin-bottom:4px;">📤 سجل صرف العهد للعمال</h2>
+                        <p style="color:var(--text-secondary);font-size:0.9rem;">من هنا يتم تسجيل جميع عمليات صرف العهدة للعمال، مع إمكانية الإلغاء وإعادة الرصيد تلقائياً.</p>
+                    </div>
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                        <button class="btn btn-primary" onclick="openIssuanceModal()">📤 صرف عهدة جديدة</button>
+                        <button class="btn" onclick="printReport('سجل صرف العهد')">🖨️ طباعة السجل</button>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
+                    <div class="form-group" style="margin:0;flex:1;min-width:160px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">👷 العامل</label>
+                        <select id="iss-filter-worker" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;">
+                            <option value="">كل العمال</option>
+                            ${workerOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:150px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">🏭 المصنع</label>
+                        <select id="iss-filter-factory" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;">
+                            <option value="">كل المصانع</option>
+                            ${factoryOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:150px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">📦 الصنف</label>
+                        <select id="iss-filter-item" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;">
+                            <option value="">كل الأصناف</option>
+                            ${itemOptions}
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:130px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">📅 من تاريخ</label>
+                        <input type="date" id="iss-filter-from" value="${monthStart}" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+                    </div>
+                    <div class="form-group" style="margin:0;min-width:130px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">📅 إلى تاريخ</label>
+                        <input type="date" id="iss-filter-to" value="${today}" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);">
+                    </div>
+                    <button class="btn" onclick="resetIssuanceFilters()" style="white-space:nowrap;">🔄 إعادة ضبط</button>
+                </div>
+
+                <div class="table-responsive">
+                    <table id="issuance-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>التاريخ</th>
+                                <th>العامل</th>
+                                <th>المصنع</th>
+                                <th>المخزن</th>
+                                <th>الصنف</th>
+                                <th>الكمية</th>
+                                <th>الحالة</th>
+                                <th>المسؤول</th>
+                                <th>ملاحظات</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="issuance-tbody">
+                            ${rows || '<tr><td colspan="11" style="text-align:center;color:var(--text-secondary);">لا توجد عمليات صرف مسجلة. اضغط "صرف عهدة جديدة" للبدء.</td></tr>'}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        }
+
+        function filterIssuanceTable() {
+            const workerFilter  = document.getElementById('iss-filter-worker')?.value  || '';
+            const factoryFilter = document.getElementById('iss-filter-factory')?.value || '';
+            const itemFilter    = document.getElementById('iss-filter-item')?.value    || '';
+            const fromDate      = document.getElementById('iss-filter-from')?.value    || '';
+            const toDate        = document.getElementById('iss-filter-to')?.value      || '';
+
+            document.querySelectorAll('#issuance-tbody tr[data-tx-id]').forEach(row => {
+                const matchWorker  = !workerFilter  || row.getAttribute('data-worker-id')  === workerFilter;
+                const matchFactory = !factoryFilter || row.getAttribute('data-factory-id') === factoryFilter;
+                const matchItem    = !itemFilter    || row.getAttribute('data-item-id')    === itemFilter;
+                const date = row.getAttribute('data-date') || '';
+                const matchFrom = !fromDate || date >= fromDate;
+                const matchTo   = !toDate   || date <= toDate;
+                row.style.display = (matchWorker && matchFactory && matchItem && matchFrom && matchTo) ? '' : 'none';
+            });
+        }
+
+        function resetIssuanceFilters() {
+            const today = new Date().toISOString().split('T')[0];
+            const monthStart = today.substring(0, 8) + '01';
+            ['iss-filter-worker','iss-filter-factory','iss-filter-item'].forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.value = '';
+            });
+            const from = document.getElementById('iss-filter-from');
+            const to   = document.getElementById('iss-filter-to');
+            if (from) from.value = monthStart;
+            if (to)   to.value   = today;
+            filterIssuanceTable();
+        }
+
+        function openIssuanceModal() {
+            const workers    = DB.get('Workers').filter(w => w.status === 'Active');
+            const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
+            const items      = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            const today      = new Date().toISOString().split('T')[0];
+
+            openModal(`
+                <div class="modal-header"><h3>📤 صرف عهدة جديدة للعامل</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div id="m-iss2-alert"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
+                    <div class="form-group" style="grid-column:1/-1;">
+                        <label style="font-weight:bold;">🔍 بحث عن العامل</label>
+                        <input type="text" id="iss2-worker-search"
+                            placeholder="اكتب اسم العامل أو كوده..."
+                            oninput="filterIssuanceWorkerSelect()"
+                            style="margin-bottom:6px;">
+                        <select id="iss2-worker" onchange="updateIssuanceWarehouseItems()">
+                            <option value="">-- اختر العامل --</option>
+                            ${workers.map(w => {
+                                const allOpts = workers;
+                                return `<option value="${w.id}" data-name="${w.name}" data-code="${w.code || ''}">${w.code ? w.code + ' - ' : ''}${w.name}</option>`;
+                            }).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">المخزن *</label>
+                        <select id="iss2-wh" onchange="updateIssuanceWarehouseItems()">
+                            <option value="">-- اختر المخزن --</option>
+                            ${warehouses.map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('')}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">الصنف *</label>
+                        <select id="iss2-item">
+                            <option value="">-- اختر المخزن أولاً --</option>
+                            ${items.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('')}
+                        </select>
+                        <div id="iss2-item-hint" style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">💡 اختر المخزن لعرض أصنافه</div>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">الكمية *</label>
+                        <input type="number" id="iss2-qty" placeholder="الكمية المُصرفة" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">${t('condition')} *</label>
+                        <select id="iss2-cond">
+                            <option value="NEW">جديد (NEW)</option>
+                            <option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label style="font-weight:bold;">${t('date')} *</label>
+                        <input type="date" id="iss2-date" value="${today}">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>${t('notes')}</label>
+                    <textarea id="iss2-notes" placeholder="ملاحظات (اختياري)..." rows="2"></textarea>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:15px;">
+                    <button class="btn" onclick="closeModal()">${t('cancel')}</button>
+                    <button class="btn btn-primary" onclick="saveIssuanceEntry()">💾 تأكيد الصرف</button>
+                </div>
+            `);
+        }
+
+        function filterIssuanceWorkerSelect() {
+            const query = (document.getElementById('iss2-worker-search')?.value || '').trim().toLowerCase();
+            const select = document.getElementById('iss2-worker');
+            if (!select) return;
+
+            if (!select._allOpts) {
+                select._allOpts = Array.from(select.options).map(o => ({
+                    value: o.value, text: o.textContent,
+                    name: (o.getAttribute('data-name') || '').toLowerCase(),
+                    code: (o.getAttribute('data-code') || '').toLowerCase()
+                }));
+            }
+
+            const normQ = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
+            const cur = select.value;
+
+            if (!normQ) {
+                select.innerHTML = select._allOpts.map(o =>
+                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" ${o.value == cur ? 'selected' : ''}>${o.text}</option>`
+                ).join('');
+                return;
+            }
+
+            const matches = select._allOpts.filter(o => {
+                if (!o.value) return false;
+                const combined = o.name + ' ' + o.code + ' ' + o.text.toLowerCase();
+                const norm = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
+                return norm.includes(normQ);
+            });
+
+            if (matches.length > 0) {
+                select.innerHTML = `<option value="">-- نتائج (${matches.length}) --</option>` +
+                    matches.map(o => `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}">${o.text}</option>`).join('');
+                select.value = matches[0].value;
+            } else {
+                select.innerHTML = `<option value="">❌ لا توجد نتائج لـ "${query}"</option>`;
+            }
+        }
+
+        function updateIssuanceWarehouseItems() {
+            const whId = Number(document.getElementById('iss2-wh')?.value);
+            const itemSelect = document.getElementById('iss2-item');
+            const hintEl = document.getElementById('iss2-item-hint');
+            if (!itemSelect) return;
+
+            const allItems = DB.get('CustodyItems').filter(i => i.status === 'Active');
+
+            if (!whId) {
+                itemSelect.innerHTML = `<option value="">-- اختر المخزن أولاً --</option>`;
+                if (hintEl) hintEl.innerHTML = '💡 اختر المخزن لعرض أصنافه';
+                return;
+            }
+
+            const txs = DB.get('Transactions').filter(t => Number(t.warehouseId) === whId && t.type === 'STOCK_IN');
+            const warehouseItemIds = new Set(txs.map(t => Number(t.itemId)));
+
+            if (warehouseItemIds.size > 0) {
+                const whItems = allItems.filter(i => warehouseItemIds.has(Number(i.id)));
+                itemSelect.innerHTML = `<option value="">-- اختر الصنف (${whItems.length} صنف) --</option>` +
+                    whItems.map(i => {
+                        const avail = getAvailableStock(whId, i.id);
+                        return `<option value="${i.id}">${i.name} (${i.code||''}) - متاح: ${avail}</option>`;
+                    }).join('');
+                if (hintEl) hintEl.innerHTML = `✅ ${whItems.length} صنف في هذا المخزن`;
+            } else {
+                itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
+                    allItems.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                if (hintEl) hintEl.innerHTML = '📋 مخزن جديد - جميع الأصناف';
+            }
+        }
+
+        function saveIssuanceEntry() {
+            const workerId = Number(document.getElementById('iss2-worker')?.value);
+            const whId     = Number(document.getElementById('iss2-wh')?.value);
+            const itemId   = Number(document.getElementById('iss2-item')?.value);
+            const qty      = Number(document.getElementById('iss2-qty')?.value);
+            const cond     = document.getElementById('iss2-cond')?.value;
+            const date     = document.getElementById('iss2-date')?.value;
+            const notes    = document.getElementById('iss2-notes')?.value.trim();
+            const op       = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
+
+            const alertEl = document.getElementById('m-iss2-alert');
+            const showErr = msg => { if (alertEl) alertEl.innerHTML = `<div class="alert alert-danger">${msg}</div>`; };
+
+            if (!workerId) { showErr('يرجى اختيار العامل'); return; }
+            if (!whId)     { showErr('يرجى اختيار المخزن'); return; }
+            if (!itemId)   { showErr('يرجى اختيار الصنف'); return; }
+            if (!qty || qty <= 0) { showErr('يرجى إدخال كمية صحيحة أكبر من صفر'); return; }
+
+            const available = getAvailableStock(whId, itemId);
+            if (qty > available) {
+                showErr(`الكمية المطلوبة (${qty}) أكبر من المتاح بالمخزن (${available} قطعة)!`);
+                return;
+            }
+
+            const txs = DB.get('Transactions');
+            const worker  = DB.get('Workers').find(w => Number(w.id) === workerId);
+            const itemObj = DB.get('CustodyItems').find(i => Number(i.id) === itemId);
+            const whObj   = DB.get('Warehouses').find(w => Number(w.id) === whId);
+
+            const newTx = {
+                id: DB.nextId('Transactions'),
+                date: date || new Date().toISOString().split('T')[0],
+                type: 'ISSUE',
+                targetType: 'WORKER',
+                warehouseId: whId,
+                workerId: workerId,
+                supervisorId: null,
+                buildingId: null,
+                apartment: null,
+                itemId: itemId,
+                quantity: qty,
+                condition: cond,
+                operator: op,
+                notes: notes
+            };
+
+            txs.push(newTx);
+            DB.set('Transactions', txs);
+
+            const workerName = worker ? worker.name : `#${workerId}`;
+            const itemName   = itemObj ? itemObj.name : `#${itemId}`;
+            const whName     = whObj   ? whObj.name   : `#${whId}`;
+            logAudit('Transactions', 'ISSUE', newTx.id, null, newTx,
+                `صرف ${qty} قطعة ${itemName} للعامل ${workerName} من مخزن ${whName}`);
+
+            closeModal();
+            alert(`✅ تم صرف ${qty} قطعة "${itemName}" للعامل "${workerName}" بنجاح!`);
+            navigate('issuance');
+        }
+
+        function cancelIssuanceEntry(txId) {
+            if (!confirm('هل أنت متأكد من إلغاء هذه الحركة؟ سيتم إعادة الكمية لرصيد المخزن تلقائياً.')) return;
+
+            const txs = DB.get('Transactions');
+            const idx = txs.findIndex(t => Number(t.id) === Number(txId));
+            if (idx === -1) { alert('لم يتم العثور على الحركة!'); return; }
+
+            const orig = txs[idx];
+            if (orig.reversed) { alert('هذه الحركة ملغاة بالفعل.'); return; }
+
+            // Mark original as reversed
+            txs[idx].reversed = true;
+
+            // Create reversal transaction to return stock
+            const revTx = {
+                id: DB.nextId('Transactions'),
+                date: new Date().toISOString().split('T')[0],
+                type: 'REVERSAL',
+                targetType: orig.targetType,
+                warehouseId: orig.warehouseId,
+                workerId: orig.workerId,
+                itemId: orig.itemId,
+                quantity: orig.quantity,
+                condition: orig.condition,
+                operator: document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System',
+                notes: `إلغاء صرف عهدة #${txId}`,
+                reversedTxId: txId
+            };
+            txs.push(revTx);
+            DB.set('Transactions', txs);
+
+            const worker  = DB.get('Workers').find(w => Number(w.id) === Number(orig.workerId));
+            const itemObj = DB.get('CustodyItems').find(i => Number(i.id) === Number(orig.itemId));
+            const whObj   = DB.get('Warehouses').find(w => Number(w.id) === Number(orig.warehouseId));
+
+            logAudit('Transactions', 'REVERSAL', txId, orig, txs[idx],
+                `إلغاء صرف ${orig.quantity} قطعة ${itemObj ? itemObj.name : ''} للعامل ${worker ? worker.name : ''} من ${whObj ? whObj.name : ''}`);
+
+            alert(`✅ تم إلغاء حركة الصرف وإعادة ${orig.quantity} قطعة لرصيد المخزن.`);
+            navigate('issuance');
+        }
+
 
         function renderAuditView() {
             const logs = DB.get('AuditLog').slice().reverse();
