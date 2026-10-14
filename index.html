@@ -1886,7 +1886,11 @@
                 const cardsHtml = factories.map(f => {
                     const facWorkers = workers.filter(w => Number(w.factoryId) === Number(f.id));
                     const activeWorkers = facWorkers.filter(w => w.status === 'Active');
-                    const leftWorkers = facWorkers.filter(w => w.status === 'Left' || w.status === 'Terminated');
+                    // المغادرون: من مصنعهم الحالي هذا + من استقال من هذا المصنع وانتقل لمصنع آخر
+                    const leftWorkers = workers.filter(w =>
+                        (w.status === 'Left' || w.status === 'Terminated') &&
+                        (Number(w.factoryId) === Number(f.id) || Number(w.resignedFromFactoryId) === Number(f.id))
+                    );
 
                     return `
                         <div class="grid-card">
@@ -7938,6 +7942,10 @@ function openAddStockModal(preWhId = null, preItemId = null) {
             workers[idx].status = 'Left';
             workers[idx].exitDate = document.getElementById('exit-date').value;
             workers[idx].exitNotes = document.getElementById('exit-notes').value;
+            // حفظ المصنع الذي استقال منه العامل حتى لو انتقل لمصنع آخر لاحقاً
+            if (workers[idx].factoryId) {
+                workers[idx].resignedFromFactoryId = workers[idx].factoryId;
+            }
 
             if (workers[idx].buildingId) {
                 const housing = DB.get('Housing');
