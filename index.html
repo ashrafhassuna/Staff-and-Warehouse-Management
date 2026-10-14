@@ -5484,6 +5484,7 @@
                 return `
                     <tr data-tx-id="${tx.id}"
                         data-worker-id="${tx.workerId || ''}"
+                        data-worker-name="${worker ? (worker.name + ' ' + (worker.code||'')).toLowerCase() : ''}"
                         data-item-id="${tx.itemId || ''}"
                         data-factory-id="${worker ? (worker.factoryId || '') : ''}"
                         data-date="${tx.date || ''}"
@@ -5522,12 +5523,12 @@
 
                 <!-- Filters -->
                 <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 18px;margin-bottom:18px;display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end;">
-                    <div class="form-group" style="margin:0;flex:1;min-width:160px;">
-                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">👷 العامل</label>
-                        <select id="iss-filter-worker" onchange="filterIssuanceTable()" style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;">
-                            <option value="">كل العمال</option>
-                            ${workerOptions}
-                        </select>
+                    <div class="form-group" style="margin:0;flex:1;min-width:200px;">
+                        <label style="font-size:0.85rem;margin-bottom:4px;display:block;">🔍 بحث عن العامل</label>
+                        <input type="text" id="iss-filter-worker"
+                            placeholder="اكتب اسم العامل أو كوده..."
+                            oninput="filterIssuanceTable()"
+                            style="padding:7px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);width:100%;">
                     </div>
                     <div class="form-group" style="margin:0;min-width:150px;">
                         <label style="font-size:0.85rem;margin-bottom:4px;display:block;">🏭 المصنع</label>
@@ -5580,14 +5581,16 @@
         }
 
         function filterIssuanceTable() {
-            const workerFilter  = document.getElementById('iss-filter-worker')?.value  || '';
+            const workerSearch  = (document.getElementById('iss-filter-worker')?.value  || '').trim().toLowerCase();
             const factoryFilter = document.getElementById('iss-filter-factory')?.value || '';
             const itemFilter    = document.getElementById('iss-filter-item')?.value    || '';
             const fromDate      = document.getElementById('iss-filter-from')?.value    || '';
             const toDate        = document.getElementById('iss-filter-to')?.value      || '';
 
             document.querySelectorAll('#issuance-tbody tr[data-tx-id]').forEach(row => {
-                const matchWorker  = !workerFilter  || row.getAttribute('data-worker-id')  === workerFilter;
+                // Worker: search by name or code (stored in data-worker-name)
+                const workerName = (row.getAttribute('data-worker-name') || '').toLowerCase();
+                const matchWorker  = !workerSearch  || workerName.includes(workerSearch);
                 const matchFactory = !factoryFilter || row.getAttribute('data-factory-id') === factoryFilter;
                 const matchItem    = !itemFilter    || row.getAttribute('data-item-id')    === itemFilter;
                 const date = row.getAttribute('data-date') || '';
