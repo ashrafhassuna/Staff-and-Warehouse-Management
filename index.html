@@ -5611,77 +5611,201 @@
             filterIssuanceTable();
         }
 
+        // *** MULTI-WORKER MULTI-ITEM ISSUANCE MODAL ***
+
+        let _iss_wh_id = null;  // shared warehouse across all rows
+
         function openIssuanceModal() {
             const workers    = DB.get('Workers').filter(w => w.status === 'Active');
             const warehouses = DB.get('Warehouses').filter(w => w.status === 'Active');
-            const items      = DB.get('CustodyItems').filter(i => i.status === 'Active');
             const today      = new Date().toISOString().split('T')[0];
 
+            const whOptions = warehouses.map(w =>
+                `<option value="${w.id}">${w.name} (${w.code})</option>`
+            ).join('');
+
+            const workerOptionsHtml = workers.map(w =>
+                `<option value="${w.id}" data-name="${w.name.toLowerCase()}" data-code="${(w.code||'').toLowerCase()}">${w.code ? w.code + ' - ' : ''}${w.name}</option>`
+            ).join('');
+
             openModal(`
-                <div class="modal-header"><h3>📤 صرف عهدة جديدة للعامل</h3><button class="modal-close" onclick="closeModal()">×</button></div>
+                <div class="modal-header">
+                    <h3>📤 صرف عهدة جديدة - متعدد العمال والأصناف</h3>
+                    <button class="modal-close" onclick="closeModal()">×</button>
+                </div>
                 <div id="m-iss2-alert"></div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                    <div class="form-group" style="grid-column:1/-1;">
-                        <label style="font-weight:bold;">🔍 بحث عن العامل</label>
-                        <input type="text" id="iss2-worker-search"
-                            placeholder="اكتب اسم العامل أو كوده..."
-                            oninput="filterIssuanceWorkerSelect()"
-                            style="margin-bottom:6px;">
-                        <select id="iss2-worker" onchange="updateIssuanceWarehouseItems()">
-                            <option value="">-- اختر العامل --</option>
-                            ${workers.map(w => {
-                                const allOpts = workers;
-                                return `<option value="${w.id}" data-name="${w.name}" data-code="${w.code || ''}">${w.code ? w.code + ' - ' : ''}${w.name}</option>`;
-                            }).join('')}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label style="font-weight:bold;">المخزن *</label>
-                        <select id="iss2-wh" onchange="updateIssuanceWarehouseItems()">
+
+                <!-- Header: warehouse + date shared for all rows -->
+                <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:16px;padding:12px;background:var(--surface);border-radius:var(--radius);border:1px solid var(--border);">
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-weight:bold;font-size:0.9rem;">🏢 المخزن (مشترك لكل الصفوف) *</label>
+                        <select id="iss2-wh" onchange="iss2_onWhChange()">
                             <option value="">-- اختر المخزن --</option>
-                            ${warehouses.map(w => `<option value="${w.id}">${w.name} (${w.code})</option>`).join('')}
+                            ${whOptions}
                         </select>
+                        <div id="iss2-wh-hint" style="font-size:0.78rem;color:var(--text-secondary);margin-top:3px;">اختر المخزن أولاً لتحميل الأصناف</div>
                     </div>
-                    <div class="form-group">
-                        <label style="font-weight:bold;">الصنف *</label>
-                        <select id="iss2-item">
-                            <option value="">-- اختر المخزن أولاً --</option>
-                            ${items.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('')}
-                        </select>
-                        <div id="iss2-item-hint" style="font-size:0.8rem;color:var(--text-secondary);margin-top:4px;">💡 اختر المخزن لعرض أصنافه</div>
-                    </div>
-                    <div class="form-group">
-                        <label style="font-weight:bold;">الكمية *</label>
-                        <input type="number" id="iss2-qty" placeholder="الكمية المُصرفة" min="1">
-                    </div>
-                    <div class="form-group">
-                        <label style="font-weight:bold;">${t('condition')} *</label>
-                        <select id="iss2-cond">
-                            <option value="NEW">جديد (NEW)</option>
-                            <option value="RETURNED_USED">مستعمل صالح (RETURNED_USED)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label style="font-weight:bold;">${t('date')} *</label>
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-weight:bold;font-size:0.9rem;">📅 تاريخ الصرف *</label>
                         <input type="date" id="iss2-date" value="${today}">
                     </div>
+                    <div class="form-group" style="margin:0;">
+                        <label style="font-weight:bold;font-size:0.9rem;">📝 ملاحظات عامة</label>
+                        <input type="text" id="iss2-notes" placeholder="ملاحظات (اختياري)...">
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>${t('notes')}</label>
-                    <textarea id="iss2-notes" placeholder="ملاحظات (اختياري)..." rows="2"></textarea>
+
+                <!-- Dynamic rows table -->
+                <div style="overflow-x:auto;">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+                        <thead>
+                            <tr style="background:var(--primary);color:#fff;">
+                                <th style="padding:8px;text-align:right;min-width:200px;">🔍 العامل</th>
+                                <th style="padding:8px;text-align:right;min-width:180px;">📦 الصنف</th>
+                                <th style="padding:8px;text-align:right;min-width:90px;">الكمية</th>
+                                <th style="padding:8px;text-align:right;min-width:130px;">الحالة</th>
+                                <th style="padding:8px;text-align:center;width:50px;"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="iss2-rows-tbody">
+                        </tbody>
+                    </table>
                 </div>
-                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:15px;">
-                    <button class="btn" onclick="closeModal()">${t('cancel')}</button>
-                    <button class="btn btn-primary" onclick="saveIssuanceEntry()">💾 تأكيد الصرف</button>
+
+                <div style="margin-top:10px;display:flex;gap:10px;align-items:center;">
+                    <button class="btn btn-success" onclick="iss2_addRow()" style="font-size:0.9rem;">➕ إضافة سطر عامل/صنف</button>
+                    <span id="iss2-rows-count" style="font-size:0.85rem;color:var(--text-secondary);"></span>
                 </div>
-            `);
+
+                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;padding-top:12px;border-top:1px solid var(--border);">
+                    <button class="btn" onclick="closeModal()">إلغاء</button>
+                    <button class="btn btn-primary" style="min-width:160px;" onclick="saveIssuanceEntry()">💾 تأكيد الصرف للكل</button>
+                </div>
+            `, true);
+
+            // store worker options globally for rows
+            window._iss2_workerOptionsHtml = workerOptionsHtml;
+            window._iss2_itemOptionsHtml   = '';
+            window._iss2_rowCounter        = 0;
+            _iss_wh_id = null;
+
+            // Add first row automatically
+            iss2_addRow();
         }
 
-        function filterIssuanceWorkerSelect() {
-            const query = (document.getElementById('iss2-worker-search')?.value || '').trim().toLowerCase();
-            const select = document.getElementById('iss2-worker');
-            if (!select) return;
+        function iss2_onWhChange() {
+            const whId = Number(document.getElementById('iss2-wh')?.value);
+            _iss_wh_id = whId || null;
+            const hintEl = document.getElementById('iss2-wh-hint');
 
+            if (!whId) {
+                window._iss2_itemOptionsHtml = '';
+                if (hintEl) hintEl.innerHTML = 'اختر المخزن أولاً لتحميل الأصناف';
+                // Reset all item selects
+                document.querySelectorAll('.iss2-item-sel').forEach(sel => {
+                    sel.innerHTML = '<option value="">-- اختر المخزن أولاً --</option>';
+                });
+                return;
+            }
+
+            const allItems = DB.get('CustodyItems').filter(i => i.status === 'Active');
+            const txs = DB.get('Transactions').filter(t => Number(t.warehouseId) === whId && t.type === 'STOCK_IN');
+            const whItemIds = new Set(txs.map(t => Number(t.itemId)));
+
+            let itemsHtml;
+            if (whItemIds.size > 0) {
+                const whItems = allItems.filter(i => whItemIds.has(Number(i.id)));
+                itemsHtml = `<option value="">-- اختر الصنف --</option>` +
+                    whItems.map(i => {
+                        const avail = getAvailableStock(whId, i.id);
+                        return `<option value="${i.id}">${i.name} (${i.code||''}) - متاح: ${avail}</option>`;
+                    }).join('');
+                if (hintEl) hintEl.innerHTML = `✅ ${whItems.length} صنف متاح في هذا المخزن`;
+            } else {
+                itemsHtml = `<option value="">-- اختر الصنف --</option>` +
+                    allItems.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('');
+                if (hintEl) hintEl.innerHTML = '📋 مخزن جديد - جميع الأصناف متاحة';
+            }
+
+            window._iss2_itemOptionsHtml = itemsHtml;
+
+            // Update all existing item selects
+            document.querySelectorAll('.iss2-item-sel').forEach(sel => {
+                const curVal = sel.value;
+                sel.innerHTML = itemsHtml;
+                if (curVal) sel.value = curVal;
+            });
+        }
+
+        function iss2_addRow() {
+            const tbody = document.getElementById('iss2-rows-tbody');
+            if (!tbody) return;
+
+            window._iss2_rowCounter = (window._iss2_rowCounter || 0) + 1;
+            const rid = window._iss2_rowCounter;
+
+            const itemsHtml = window._iss2_itemOptionsHtml ||
+                '<option value="">-- اختر المخزن أولاً --</option>';
+
+            const tr = document.createElement('tr');
+            tr.id = `iss2-row-${rid}`;
+            tr.style.borderBottom = '1px solid var(--border)';
+            tr.innerHTML = `
+                <td style="padding:8px;vertical-align:top;">
+                    <input type="text" class="iss2-worker-search" placeholder="اكتب اسم العامل..."
+                        oninput="iss2_filterWorker(${rid})"
+                        style="width:100%;margin-bottom:5px;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+                    <select class="iss2-worker-sel" id="iss2-worker-${rid}"
+                        style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+                        <option value="">-- اختر العامل --</option>
+                        ${window._iss2_workerOptionsHtml || ''}
+                    </select>
+                </td>
+                <td style="padding:8px;vertical-align:top;">
+                    <select class="iss2-item-sel" id="iss2-item-${rid}"
+                        style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+                        ${itemsHtml}
+                    </select>
+                </td>
+                <td style="padding:8px;vertical-align:top;">
+                    <input type="number" class="iss2-qty-inp" id="iss2-qty-${rid}"
+                        placeholder="الكمية" min="1"
+                        style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+                </td>
+                <td style="padding:8px;vertical-align:top;">
+                    <select class="iss2-cond-sel" id="iss2-cond-${rid}"
+                        style="width:100%;padding:5px 8px;border-radius:6px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:0.85rem;">
+                        <option value="NEW">جديد (NEW)</option>
+                        <option value="RETURNED_USED">مستعمل صالح</option>
+                    </select>
+                </td>
+                <td style="padding:8px;text-align:center;vertical-align:top;">
+                    <button onclick="iss2_removeRow(${rid})" title="حذف هذا السطر"
+                        style="background:var(--danger);color:#fff;border:none;border-radius:6px;padding:4px 8px;cursor:pointer;font-size:1rem;">🗑️</button>
+                </td>
+            `;
+            tbody.appendChild(tr);
+            iss2_updateCount();
+        }
+
+        function iss2_removeRow(rid) {
+            const row = document.getElementById(`iss2-row-${rid}`);
+            if (row) row.remove();
+            iss2_updateCount();
+        }
+
+        function iss2_updateCount() {
+            const rows = document.querySelectorAll('#iss2-rows-tbody tr');
+            const el = document.getElementById('iss2-rows-count');
+            if (el) el.textContent = `${rows.length} سطر`;
+        }
+
+        function iss2_filterWorker(rid) {
+            const searchEl = document.querySelector(`#iss2-row-${rid} .iss2-worker-search`);
+            const select   = document.getElementById(`iss2-worker-${rid}`);
+            if (!searchEl || !select) return;
+
+            const query = searchEl.value.trim().toLowerCase();
             if (!select._allOpts) {
                 select._allOpts = Array.from(select.options).map(o => ({
                     value: o.value, text: o.textContent,
@@ -5690,121 +5814,125 @@
                 }));
             }
 
-            const normQ = typeof normalizeArabic === 'function' ? normalizeArabic(query) : query;
-            const cur = select.value;
-
-            if (!normQ) {
+            if (!query) {
                 select.innerHTML = select._allOpts.map(o =>
-                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}" ${o.value == cur ? 'selected' : ''}>${o.text}</option>`
+                    `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}">${o.text}</option>`
                 ).join('');
                 return;
             }
 
             const matches = select._allOpts.filter(o => {
                 if (!o.value) return false;
-                const combined = o.name + ' ' + o.code + ' ' + o.text.toLowerCase();
-                const norm = typeof normalizeArabic === 'function' ? normalizeArabic(combined) : combined;
-                return norm.includes(normQ);
+                return (o.name + ' ' + o.code + ' ' + o.text).includes(query);
             });
 
             if (matches.length > 0) {
-                select.innerHTML = `<option value="">-- نتائج (${matches.length}) --</option>` +
-                    matches.map(o => `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}">${o.text}</option>`).join('');
+                select.innerHTML = `<option value="">-- (${matches.length} نتيجة) --</option>` +
+                    matches.map(o =>
+                        `<option value="${o.value}" data-name="${o.name}" data-code="${o.code}">${o.text}</option>`
+                    ).join('');
                 select.value = matches[0].value;
             } else {
-                select.innerHTML = `<option value="">❌ لا توجد نتائج لـ "${query}"</option>`;
+                select.innerHTML = `<option value="">❌ لا توجد نتائج</option>`;
             }
         }
 
-        function updateIssuanceWarehouseItems() {
-            const whId = Number(document.getElementById('iss2-wh')?.value);
-            const itemSelect = document.getElementById('iss2-item');
-            const hintEl = document.getElementById('iss2-item-hint');
-            if (!itemSelect) return;
-
-            const allItems = DB.get('CustodyItems').filter(i => i.status === 'Active');
-
-            if (!whId) {
-                itemSelect.innerHTML = `<option value="">-- اختر المخزن أولاً --</option>`;
-                if (hintEl) hintEl.innerHTML = '💡 اختر المخزن لعرض أصنافه';
-                return;
-            }
-
-            const txs = DB.get('Transactions').filter(t => Number(t.warehouseId) === whId && t.type === 'STOCK_IN');
-            const warehouseItemIds = new Set(txs.map(t => Number(t.itemId)));
-
-            if (warehouseItemIds.size > 0) {
-                const whItems = allItems.filter(i => warehouseItemIds.has(Number(i.id)));
-                itemSelect.innerHTML = `<option value="">-- اختر الصنف (${whItems.length} صنف) --</option>` +
-                    whItems.map(i => {
-                        const avail = getAvailableStock(whId, i.id);
-                        return `<option value="${i.id}">${i.name} (${i.code||''}) - متاح: ${avail}</option>`;
-                    }).join('');
-                if (hintEl) hintEl.innerHTML = `✅ ${whItems.length} صنف في هذا المخزن`;
-            } else {
-                itemSelect.innerHTML = `<option value="">-- اختر الصنف --</option>` +
-                    allItems.map(i => `<option value="${i.id}">${i.name} (${i.code||''})</option>`).join('');
-                if (hintEl) hintEl.innerHTML = '📋 مخزن جديد - جميع الأصناف';
-            }
-        }
+        // Keep old single-use helpers (used by old modal instances if any)
+        function filterIssuanceWorkerSelect() { iss2_filterWorker(1); }
+        function updateIssuanceWarehouseItems() { iss2_onWhChange(); }
 
         function saveIssuanceEntry() {
-            const workerId = Number(document.getElementById('iss2-worker')?.value);
-            const whId     = Number(document.getElementById('iss2-wh')?.value);
-            const itemId   = Number(document.getElementById('iss2-item')?.value);
-            const qty      = Number(document.getElementById('iss2-qty')?.value);
-            const cond     = document.getElementById('iss2-cond')?.value;
-            const date     = document.getElementById('iss2-date')?.value;
-            const notes    = document.getElementById('iss2-notes')?.value.trim();
-            const op       = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
+            const whId  = Number(document.getElementById('iss2-wh')?.value);
+            const date  = document.getElementById('iss2-date')?.value;
+            const notes = document.getElementById('iss2-notes')?.value.trim();
+            const op    = document.getElementById('current-user-display')?.textContent || DB.getCurrentUsername() || 'System';
 
             const alertEl = document.getElementById('m-iss2-alert');
             const showErr = msg => { if (alertEl) alertEl.innerHTML = `<div class="alert alert-danger">${msg}</div>`; };
 
-            if (!workerId) { showErr('يرجى اختيار العامل'); return; }
-            if (!whId)     { showErr('يرجى اختيار المخزن'); return; }
-            if (!itemId)   { showErr('يرجى اختيار الصنف'); return; }
-            if (!qty || qty <= 0) { showErr('يرجى إدخال كمية صحيحة أكبر من صفر'); return; }
+            if (!whId) { showErr('يرجى اختيار المخزن أولاً'); return; }
 
-            const available = getAvailableStock(whId, itemId);
-            if (qty > available) {
-                showErr(`الكمية المطلوبة (${qty}) أكبر من المتاح بالمخزن (${available} قطعة)!`);
-                return;
+            const rows = document.querySelectorAll('#iss2-rows-tbody tr');
+            if (!rows.length) { showErr('يرجى إضافة سطر واحد على الأقل'); return; }
+
+            // Collect & validate all rows
+            const entries = [];
+            let hasError = false;
+
+            rows.forEach((row, idx) => {
+                const rowNum  = idx + 1;
+                const workerSel = row.querySelector('.iss2-worker-sel');
+                const itemSel   = row.querySelector('.iss2-item-sel');
+                const qtyInp    = row.querySelector('.iss2-qty-inp');
+                const condSel   = row.querySelector('.iss2-cond-sel');
+
+                const workerId = Number(workerSel?.value);
+                const itemId   = Number(itemSel?.value);
+                const qty      = Number(qtyInp?.value);
+                const cond     = condSel?.value || 'NEW';
+
+                if (!workerId) { showErr(`السطر ${rowNum}: يرجى اختيار العامل`); hasError = true; return; }
+                if (!itemId)   { showErr(`السطر ${rowNum}: يرجى اختيار الصنف`); hasError = true; return; }
+                if (!qty || qty <= 0) { showErr(`السطر ${rowNum}: يرجى إدخال كمية صحيحة`); hasError = true; return; }
+
+                entries.push({ workerId, itemId, qty, cond });
+            });
+
+            if (hasError) return;
+
+            // Check available stock (aggregate same item+cond)
+            const stockNeeded = {};
+            entries.forEach(e => {
+                const k = `${e.itemId}_${e.cond}`;
+                stockNeeded[k] = (stockNeeded[k] || 0) + e.qty;
+            });
+
+            for (const k in stockNeeded) {
+                const [itemIdStr, cond] = k.split('_');
+                const itemId = Number(itemIdStr);
+                const needed = stockNeeded[k];
+                const avail  = getAvailableStock(whId, itemId);
+                if (needed > avail) {
+                    const itemName = DB.get('CustodyItems').find(i => Number(i.id) === itemId)?.name || `#${itemId}`;
+                    showErr(`الصنف "${itemName}" بحالة ${cond === 'NEW' ? 'جديد' : 'مستعمل'}: المطلوب ${needed} والمتاح ${avail} فقط!`);
+                    return;
+                }
             }
 
+            // Save all transactions
             const txs = DB.get('Transactions');
-            const worker  = DB.get('Workers').find(w => Number(w.id) === workerId);
-            const itemObj = DB.get('CustodyItems').find(i => Number(i.id) === itemId);
-            const whObj   = DB.get('Warehouses').find(w => Number(w.id) === whId);
+            let savedCount = 0;
 
-            const newTx = {
-                id: DB.nextId('Transactions'),
-                date: date || new Date().toISOString().split('T')[0],
-                type: 'ISSUE',
-                targetType: 'WORKER',
-                warehouseId: whId,
-                workerId: workerId,
-                supervisorId: null,
-                buildingId: null,
-                apartment: null,
-                itemId: itemId,
-                quantity: qty,
-                condition: cond,
-                operator: op,
-                notes: notes
-            };
+            entries.forEach(e => {
+                const newTx = {
+                    id: DB.nextId('Transactions'),
+                    date: date || new Date().toISOString().split('T')[0],
+                    type: 'ISSUE',
+                    targetType: 'WORKER',
+                    warehouseId: whId,
+                    workerId: e.workerId,
+                    supervisorId: null,
+                    buildingId: null,
+                    apartment: null,
+                    itemId: e.itemId,
+                    quantity: e.qty,
+                    condition: e.cond,
+                    operator: op,
+                    notes: notes
+                };
+                txs.push(newTx);
+                savedCount++;
 
-            txs.push(newTx);
+                const worker  = DB.get('Workers').find(w => Number(w.id) === e.workerId);
+                const itemObj = DB.get('CustodyItems').find(i => Number(i.id) === e.itemId);
+                const whObj   = DB.get('Warehouses').find(w => Number(w.id) === whId);
+                logAudit('Transactions', 'ISSUE', newTx.id, null, newTx,
+                    `صرف ${e.qty} قطعة ${itemObj?.name||''} للعامل ${worker?.name||''} من مخزن ${whObj?.name||''}`);
+            });
+
             DB.set('Transactions', txs);
-
-            const workerName = worker ? worker.name : `#${workerId}`;
-            const itemName   = itemObj ? itemObj.name : `#${itemId}`;
-            const whName     = whObj   ? whObj.name   : `#${whId}`;
-            logAudit('Transactions', 'ISSUE', newTx.id, null, newTx,
-                `صرف ${qty} قطعة ${itemName} للعامل ${workerName} من مخزن ${whName}`);
-
             closeModal();
-            alert(`✅ تم صرف ${qty} قطعة "${itemName}" للعامل "${workerName}" بنجاح!`);
+            alert(`✅ تم صرف ${savedCount} عملية بنجاح!`);
             navigate('issuance');
         }
 
